@@ -30,7 +30,54 @@ instance : Iris.BI.BIBase OProp where
   persistently φ := φ
   later φ := φ
 
-instance : Iris.BI OProp := sorry
+instance : Iris.BI OProp where
+  toCOFE := sorry
+  entails_refl := sorry
+  entails_trans := sorry
+  equiv_iff := sorry
+  and_ne := sorry
+  or_ne := sorry
+  imp_ne := sorry
+  sForall_ne := sorry
+  sExists_ne := sorry
+  sep_ne := sorry
+  wand_ne := sorry
+  persistently_ne := sorry
+  later_ne := sorry
+  pure_intro := sorry
+  pure_elim' := sorry
+  and_elim_l := sorry
+  and_elim_r := sorry
+  and_intro := sorry
+  or_intro_l := sorry
+  or_intro_r := sorry
+  or_elim := sorry
+  imp_intro := sorry
+  imp_elim := sorry
+  sForall_intro := sorry
+  sForall_elim := sorry
+  sExists_intro := sorry
+  sExists_elim := sorry
+  sep_mono := sorry
+  emp_sep := sorry
+  sep_symm := sorry
+  sep_assoc_l := sorry
+  wand_intro := sorry
+  wand_elim := sorry
+  persistently_mono := sorry
+  persistently_idem_2 := sorry
+  persistently_emp_2 := sorry
+  persistently_and_2 := sorry
+  persistently_sExists_1 := sorry
+  persistently_absorb_l := sorry
+  persistently_and_l := sorry
+  later_mono := sorry
+  later_intro := sorry
+  later_sForall_2 := sorry
+  later_sExists_false := sorry
+  later_sep := sorry
+  later_persistently := sorry
+  later_false_em := sorry
 
 def sure (P : Mem → Prop) : OProp :=
   hasProb P 1

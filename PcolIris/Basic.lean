@@ -27,6 +27,12 @@ lemma ConvexPowerset.mem_bind {α β : Type} {s : ConvexPowerset α}
     simp only [Set.mem_iUnion, exists_prop, Function.uncurry_apply_pair]
     exact ⟨⟨ξ, hξ, Set.mem_singleton _, hf⟩, True.intro⟩
 
+lemma wp_weaken {c : Cmd} {φ ψ : OProp}
+    (h : φ ⊢ ψ) : wp c φ ⊢ wp c ψ := by
+  intro 𝓟 hc μ 𝓟fr hre ν hν
+  have ⟨𝓠, hre', hφ⟩ := hc μ 𝓟fr hre ν hν
+  refine ⟨𝓠, hre', ?_⟩; exact h 𝓠 hφ
+
 lemma wp_skip (c : Cmd) (φ : OProp) :
     φ ⊣⊢ wp Cmd.skip φ := by
   constructor
@@ -38,13 +44,12 @@ lemma wp_skip (c : Cmd) (φ : OProp) :
     rwa [heq]
   · intro 𝓟 hφ; sorry
 
-lemma wp_seq {c₁ c₂ : Cmd} {φ ψ ϑ : OProp}
-    (h₁ : φ ⊢ wp c₁ ψ) (h₂ : ψ ⊢ wp c₂ ϑ) :
-    φ ⊢ wp (Cmd.seq c₁ c₂) ϑ := by
-  intro 𝓟 hφ μ 𝓟fr href ν; rw [Cmd.to_pom, Pom.lin_seq, ← bind_assoc]
+lemma wp_seq {c₁ c₂ : Cmd} {ψ : OProp} :
+    wp c₁ (wp c₂ ψ) ⊢ wp (Cmd.seq c₁ c₂) ψ := by
+  intro 𝓟 h μ 𝓟fr href ν; rw [Cmd.to_pom, Pom.lin_seq, ← bind_assoc]
   intro hν; rcases ConvexPowerset.mem_bind.mp hν with ⟨ξ, hξ, f, hf, rfl⟩
-  have ⟨𝓡, href', hψ⟩ := h₁ 𝓟 hφ μ 𝓟fr href ξ hξ
-  refine h₂ 𝓡 hψ ξ 𝓟fr href' _ ?_
+  have ⟨𝓡, href', h'⟩ := h μ 𝓟fr href ξ hξ
+  refine h' ξ 𝓟fr href' _ ?_
   exact ConvexPowerset.mem_bind.mpr ⟨ξ, ConvexPowerset.self_mem_singleton' _, f, hf, rfl⟩
 
 lemma wp_if_true {b : Expr} {c₁ c₂ : Cmd} {φ ψ : OProp}
@@ -69,6 +74,25 @@ lemma wp_if_true {b : Expr} {c₁ c₂ : Cmd} {φ ψ : OProp}
         Linearization.Sem.sem (Test.lift b) σ =
         (pure Bool.true : ConvexPowerset Bool) := sorry
     simp only [heq, pure_bind, cond_true] at hf; exact hf
+
+def Expr.equals (e₁ e₂ : Expr) : Mem → Prop :=
+  fun σ ↦ (e₁ σ).isSome ∧ e₁ σ = e₂ σ
+infixr:66 " == " => Expr.equals
+
+
+
+lemma wp_assign (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
+  (OProp.sure ($ x == Expr.literal v) ∗ (OProp.sure ($ x == (fun σ ↦ e (σ.extend x v))) -∗ ψ)) ⊢
+  wp (x ::= e) ψ := sorry
+
+lemma example_proof :
+    (OProp.sure <| $"x" == 0) ⊢ wp ("x" ::= $"x" + 1) (OProp.sure <| $"x" == 1) := by
+  iintro h
+  iapply wp_assign _ _ _ 0
+  iframe; iintro h;
+
+
+
 
 
 end Pcol

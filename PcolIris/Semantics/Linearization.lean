@@ -17,12 +17,6 @@ end Equiv
 
 namespace Pcol
 
-structure Inv where
-  dom : Set Var
-  prop : Mem → Prop
-  dom_valid : ∀ {σ}, prop σ → σ.dom = dom
-  prop_finite : { σ | prop σ }.Finite
-
 open Linearization
 
 open Classical in
@@ -92,11 +86,6 @@ lemma nondet_mono {ι α : Type} [Finite ι] : Monotone (@Nondet.nondet (ConvexP
 
 noncomputable instance {α : Type} : Linearizable ConvexPowerset α where
   nondet_mono hle := nondet_mono hle
-  nondet_continuous := by
-    intro ι _; by_cases hne : Nonempty ι <;>
-      simp only [Nondet.nondet, hne, ↓reduceDIte]
-    · exact ConvexPowerset.nondet_continuous
-    · exact ωScottContinuous.fun_const
   bind_additive {ι} _ κ f := by
     by_cases hne : Nonempty ι <;> simp only [Nondet.nondet, hne, ↓reduceDIte]
     · exact bind_assoc _ _ _
@@ -121,7 +110,6 @@ instance : ScottCompact Act where
   scottCompact _ := by
     rintro d rfl; have ⟨a, ha⟩ := d.nonempty
     refine ⟨a, ha, ?_⟩; exact (d.le_dSup ha).symm
-
 
 inductive Test : Type where
 | lift : Expr → Test
