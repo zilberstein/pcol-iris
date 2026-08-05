@@ -25,7 +25,7 @@
    "type": "git",
    "subDir": null,
    "scope": "",
-   "rev": "ec5fb5ad32ed1bf298bf256dd4958414c45ebf00",
+   "rev": "5ce4c3715692870180a0425ceb91ea989a79831c",
    "name": "«convex-powerset»",
    "manifestFile": "lake-manifest.json",
    "inputRev": "main",

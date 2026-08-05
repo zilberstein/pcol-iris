@@ -11,9 +11,13 @@ namespace Pcol
 def wp (𝓘 : Inv) (c : Cmd Act) (ψ : OProp) : OProp :=
   fun 𝓟 ↦
     ∀ (μ : Distr Mem) (𝓟fr : ProbSpace Mem),
-      (𝓟.product 𝓟fr ≼ μ) →
+      -- The initial distribution `μ` is a refinement of the precondition
+      -- `𝓟`, the frame `𝓟fr`, and the invariant `𝓘`
+      ((𝓟 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ) →
+      -- Take any `ν` that results from running the program
       ∀ ν ∈ ConvexPowerset.singleton' μ >>= 𝓛 (c.withInv 𝓘).to_pom,
-        ∃ 𝓠, (𝓠.product 𝓟fr ≼ ν) ∧ ψ 𝓠
+      -- Then `ν` refines some probability space `𝓠`, which satisfies the postcondition `ψ`
+        ∃ 𝓠, ((𝓠 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν) ∧ ψ 𝓠
 
 lemma ConvexPowerset.mem_bind {α β : Type} {s : ConvexPowerset α}
     {k : α → ConvexPowerset β} {ν : Distr β} :
@@ -80,9 +84,22 @@ def Expr.equals (e₁ e₂ : Expr) : Mem → Prop :=
   fun σ ↦ (e₁ σ).isSome ∧ e₁ σ = e₂ σ
 infixr:66 " == " => Expr.equals
 
+-- This mostly follows from invariant monotonicity, but we need a few more properties about
+-- assertions, etc
 lemma wp_share {𝓘 : Inv} {c : Cmd Act} {ψ : OProp} :
-    wp 𝓘 c ψ ⊢ wp Inv.emp c iprop(ψ ∗ OProp.sure 𝓘.prop) := by
-  sorry
+    OProp.sure 𝓘.prop ∗ wp 𝓘 c ψ ⊢ wp Inv.emp c iprop(ψ ∗ OProp.sure 𝓘.prop) := by
+  intro 𝓟 ⟨𝓟₁, 𝓟₂, hle, h𝓘, hwp⟩ μ 𝓟fr hre ν hν
+  have hν' : ν ∈ ConvexPowerset.singleton' μ >>= Pom.lin (c.withInv 𝓘).to_pom := by
+    refine le_iff_supset.mp ?_ hν
+    apply ConvexPowerset.bind_monotone (le_refl _)
+    apply (Pom.lin_continuous (act := WithInv Act) (test := Test)).monotone
+    apply Cmd.withInv_monotone; refine ⟨Set.empty_subset _, ?_⟩
+    intro σ; sorry
+  have ⟨𝓠, hre', hψ⟩ := hwp μ 𝓟fr sorry ν sorry
+  refine ⟨𝓠 ⊗ ProbSpace.trivial 𝓘.prop, ?_, ?_⟩
+  · sorry
+  · refine ⟨_, _, le_refl _, hψ, sorry⟩
+
 
 lemma wp_assign {𝓘 : Inv} (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
   (OProp.sure ($ x == Expr.literal v) ∗ (OProp.sure ($ x == (fun σ ↦ e (σ.extend x v))) -∗ ψ)) ⊢

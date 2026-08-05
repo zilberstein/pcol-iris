@@ -12,6 +12,9 @@ structure ProbSpace (α : Type*) where
 
 namespace ProbSpace
 
+-- The trivial/dirac measure centered on the set `P`
+def trivial (P : Mem → Prop) : ProbSpace Mem := sorry
+
 noncomputable def product (p : ProbSpace Mem) (q : ProbSpace Mem) : ProbSpace Mem := {
   mspace := (p.mspace.prod q.mspace).map Nat.pairEquiv
   μ :=
@@ -28,6 +31,8 @@ noncomputable def product (p : ProbSpace Mem) (q : ProbSpace Mem) : ProbSpace Me
     let ⟨i, j⟩ := Nat.pairEquiv.symm k
     Mem.union (p.state i) (q.state j)
 }
+
+infixl:35 " ⊗ " => product
 
 def support {α : Type} (𝓟 : ProbSpace α) : Set ℕ :=
   Set.sInter { E | 𝓟.mspace.MeasurableSet' E ∧ 𝓟.μ E = 1 }
@@ -84,6 +89,6 @@ end Refines
 
 end Distr
 
-notation p " ≼ " ξ => Distr.Refines ξ p
+notation:30 p " ≼ " ξ => Distr.Refines ξ p
 
 end Pcol
