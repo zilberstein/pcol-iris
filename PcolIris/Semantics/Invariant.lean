@@ -14,6 +14,18 @@ structure Inv where
 
 namespace Inv
 
+def emp : Inv where
+  dom := ∅
+  prop σ := σ.dom = ∅
+  dom_finite := Set.finite_empty
+  dom_valid := fun h ↦ h
+  prop_finite := by
+    refine (Set.finite_singleton (fun _ : Var ↦ none)).subset ?_
+    intro σ hdom; ext1 x
+    have := Set.eq_empty_iff_forall_notMem.mp hdom x
+    simp only [Mem.dom, ne_eq, Set.mem_setOf_eq, Decidable.not_not] at this;
+    exact this
+
 instance : LE Inv where
   le 𝓙 𝓘 :=
     𝓘.dom ⊆ 𝓙.dom ∧
