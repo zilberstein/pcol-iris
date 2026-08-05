@@ -59,6 +59,29 @@ instance : PartialOrder Inv where
       · rintro ⟨σ, rfl, h⟩
         rwa [← heq, ← 𝓘.dom_valid h, Mem.restrict_self]
 
+/-- A directed set of invariants contains an element whose domain is contained in the
+domain of every element of the set. -/
+lemma exists_min_dom (d : DSet Inv) : ∃ L ∈ d, ∀ 𝓙 ∈ d, L.dom ⊆ 𝓙.dom := by
+  have hne : {n : ℕ | ∃ 𝓙 ∈ d, 𝓙.dom.ncard = n}.Nonempty := by
+    obtain ⟨𝓙, h𝓙⟩ := d.nonempty; exact ⟨𝓙.dom.ncard, 𝓙, h𝓙, rfl⟩
+  obtain ⟨L, hL, hcard⟩ := Nat.sInf_mem hne
+  refine ⟨L, hL, ?_⟩
+  intro 𝓙 h𝓙
+  obtain ⟨M, hM, hle₁, hle₂⟩ := d.directed _ hL _ h𝓙
+  have hsub : M.dom ⊆ L.dom := hle₁.1
+  have hle : L.dom.ncard ≤ M.dom.ncard := by
+    rw [hcard]; exact Nat.sInf_le ⟨M, hM, rfl⟩
+  have heq := Set.eq_of_subset_of_ncard_le hsub hle L.dom_finite
+  rw [← heq]; exact hle₂.1
+
+/-- Two comparable invariants with the same domain are equal. -/
+lemma eq_of_le_of_dom_eq {L M : Inv} (hle : L ≤ M) (hdom : M.dom = L.dom) : M = L := by
+  ext1
+  · exact hdom
+  · ext σ; rw [hle.2]; constructor
+    · rintro ⟨τ, rfl, h⟩; rwa [hdom, ← L.dom_valid h, Mem.restrict_self]
+    · intro h; exact ⟨σ, by rw [hdom, ← L.dom_valid h, Mem.restrict_self], h⟩
+
 instance : DCPO Inv where
   dSup d := {
     dom := ⋂ 𝓘 ∈ d, 𝓘.dom
@@ -71,7 +94,11 @@ instance : DCPO Inv where
     dom_valid := by intro σ ⟨hdom, _⟩; exact hdom
     prop_finite := by
       have ⟨𝓘, hd⟩ := d.nonempty
-      have := 𝓘.prop_finite; sorry
+      refine Set.Finite.subset (𝓘.prop_finite.image (Mem.restrict · (⋂ 𝓘 ∈ d, 𝓘.dom))) ?_
+      rintro σ ⟨hdom, hprop⟩
+      obtain ⟨τ, heq, hτ⟩ := hprop _ hd
+      rw [hdom] at heq
+      exact ⟨τ, hτ, heq.symm⟩
   }
   lubOfDirected d := by
     constructor
@@ -111,7 +138,23 @@ instance : DCPO Inv where
           · constructor
             · rw [Mem.restrict_dom]; apply Set.inter_eq_self_of_subset_right
               rw [𝓙.dom_valid hp]; exact Set.biInter_subset_of_mem h𝓙
-            · intro 𝓚 h𝓚; sorry
+            · intro 𝓚 h𝓚
+              obtain ⟨L, hL, hle₁, hle₂⟩ := d.directed _ h𝓙 _ h𝓚
+              have hDL : (⋂ 𝓚 ∈ d, 𝓚.dom) ⊆ L.dom := Set.biInter_subset_of_mem hL
+              have h₁ : L.prop (τ.restrict L.dom) := hle₁.2.mpr ⟨τ, rfl, hp⟩
+              obtain ⟨ρ, heqρ, hρ⟩ := hle₂.2.mp h₁
+              refine ⟨ρ, ?_, hρ⟩
+              have hdomτ : Mem.dom (τ.restrict (⋂ 𝓚 ∈ d, 𝓚.dom))
+                  = ⋂ 𝓚 ∈ d, 𝓚.dom := by
+                rw [Mem.restrict_dom, 𝓙.dom_valid hp]
+                exact Set.inter_eq_self_of_subset_right (Set.biInter_subset_of_mem h𝓙)
+              rw [hdomτ]
+              calc τ.restrict (⋂ 𝓚 ∈ d, 𝓚.dom)
+                  = Mem.restrict (τ.restrict L.dom) (⋂ 𝓚 ∈ d, 𝓚.dom) := by
+                    rw [Mem.restrict_restrict, Set.inter_eq_self_of_subset_right hDL]
+                _ = Mem.restrict (ρ.restrict L.dom) (⋂ 𝓚 ∈ d, 𝓚.dom) := by rw [heqρ]
+                _ = ρ.restrict (⋂ 𝓚 ∈ d, 𝓚.dom) := by
+                    rw [Mem.restrict_restrict, Set.inter_eq_self_of_subset_right hDL]
         · rintro ⟨τ, rfl, hdom, h⟩
           have ⟨ρ, heq, hp⟩ := h _ h𝓙; refine hprop.mpr ⟨ρ, ?_, hp⟩
           rw [heq, Mem.restrict_restrict]; congr
@@ -124,9 +167,21 @@ lemma ge_of_subset {𝓘 𝓙 : Inv} (hle : 𝓘 ≤ 𝓙) :
     𝓙.prop = fun σ ↦ ∃ τ : Mem, σ = τ.restrict 𝓙.dom ∧ 𝓘.prop τ := by
   ext σ; rw [hle.2]; rfl
 
+/-- The supremum of a directed set of invariants is attained: it is a member of the set. -/
+lemma dSup_mem (d : DSet Inv) : ∃ L ∈ d, d.dSup = L := by
+  obtain ⟨L, hL, hmin⟩ := exists_min_dom d
+  have hub : ∀ 𝓙 ∈ d, 𝓙 ≤ L := by
+    intro 𝓙 h𝓙
+    obtain ⟨M, hM, hle₁, hle₂⟩ := d.directed _ h𝓙 _ hL
+    have heq := eq_of_le_of_dom_eq hle₂ (Set.Subset.antisymm hle₂.1 (hmin _ hM))
+    exact heq ▸ hle₁
+  exact ⟨L, hL, le_antisymm (DSet.dSup_le hub) (DSet.le_dSup hL)⟩
+
 instance : ScottCompact Inv where
   scottCompact 𝓘 := by
-    sorry
+    intro d hle
+    obtain ⟨L, hL, heq⟩ := dSup_mem d
+    exact ⟨L, hL, heq ▸ hle⟩
 
 open Classical in
 noncomputable def check (𝓘 : Inv) (σ : Mem) : ConvexPowerset Mem :=
