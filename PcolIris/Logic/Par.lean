@@ -2,94 +2,30 @@ import ConvexPowerset.MinProb
 import DomainTheory.OmegaCompletePartialOrder.Instances
 import Pom.Operations.Par
 
+import PcolIris.Logic.ParComp
 import PcolIris.Semantics.Invariant
-
-namespace Lpo
-
-open Pcol
-
-def HasInv {act test : Type} (α : Lpo (Label (WithInv act) test)) (𝓘 : Inv) : Prop :=
-  ∀ x ∈ α.nodes, match α.lab x with
-  | Label.act a => a.inv = 𝓘
-  | _ => true
-
-end Lpo
-
-namespace Lpofin
-
-open Pcol
-
-variable {act test : Type}
-
-def HasInv (α : Lpofin (Label (WithInv act) test)) (𝓘 : Inv) : Prop :=
-  α.val.HasInv 𝓘
-
-noncomputable def par {x : Node} {α β : Lpofin (Label act test)}
-    (hx : x ∉ α.nodes) (hx' : x ∉ β.nodes) (hd : Disjoint α.nodes β.nodes) :
-    Lpofin (Label act test) :=
-  ⟨Lpo.par hx hx' hd Label.fork_ne_bot,
-    Set.finite_insert.mpr (Set.finite_union.mpr ⟨α.property, β.property⟩)⟩
-
-end Lpofin
-
-namespace Pom
-
-open Pcol
-
-variable {act test : Type}
-
-def HasInv (p : Pom (Label (WithInv act) test)) (𝓘 : Inv) : Prop :=
-  ∀ α ∈ p, α.HasInv 𝓘
-
-namespace HasInv
-
-lemma to_lpo_trunc {p : Pom (Label (WithInv act) test)} {α : Lpo (Label (WithInv act) test)}
-    {𝓘 : Inv} (h : p.HasInv 𝓘) (hmem : α ∈ p) {n : ℕ} :
-    (α.trunc n).HasInv 𝓘 := by
-  intro x ⟨hx, _⟩; by_cases hlev : α.rel.lev x < n
-  · conv => arg 2; exact if_pos hlev
-    exact h α hmem x hx
-  · conv => arg 2; exact if_neg hlev
-
-end HasInv
-
-end Pom
 
 namespace Pcol
 
 open Linearization
 
-variable
-  {α β : Lpofin (Label (WithInv Act) Test)}
-  {root : Node} (hr₁ : root ∉ α.nodes) (hr₂ : root ∉ β.nodes)
-  {𝓘 : Inv}
-  (hdn : Disjoint α.nodes β.nodes)
-  (A B : Set Mem)
-
-def Mem.sep (A B : Set Mem) : Set Mem :=
-    { σ | ∃ σ₁ ∈ A, ∃ σ₂ ∈ B, σ = σ₁.union σ₂ }
-
-namespace Lpofin
-
--- Lemma C.3 from POPL'26
-theorem par_comp
-    {σ₁ : Mem} {σ₂ : Mem} {τ τ₁ τ₂ : Mem} {𝓘 : Inv}
-    (hτ : 𝓘.prop τ) (hτ₁ : 𝓘.prop τ₁) (hτ₂ : 𝓘.prop τ₂)
-    (hinv₁ : α.HasInv 𝓘) (hinv₂ : β.HasInv 𝓘)
-    (hd₁ : Disjoint τ.dom σ₁.dom) (hd₂ : Disjoint τ.dom σ₂.dom)
-    (hd : Disjoint σ₁.dom σ₂.dom) :
-    ConvexPowerset.minProb
-      (Lpofin.lin
-        (Lpofin.par hr₁ hr₂ hdn)
-        (σ₁.union (σ₂.union τ)))
-      (Mem.sep A (Mem.sep B 𝓘.prop)) ≥
-      ConvexPowerset.minProb (Lpofin.lin α (σ₁.union τ₁)) (Mem.sep A 𝓘.prop) *
-      ConvexPowerset.minProb (Lpofin.lin β (σ₂.union τ₂)) (Mem.sep B 𝓘.prop) := by
-  sorry
-
-end Lpofin
-
 namespace Pom
+
+def ThreadLocal (p : Pom (Label (WithInv Act) Test)) (V : Set Var) (𝓘 : Inv) : Prop :=
+  ∀ α ∈ p, Pcol.ThreadLocal α V 𝓘
+
+namespace ThreadLocal
+
+lemma to_lpo_trunc {p : Pom (Label (WithInv Act) Test)} {α : Lpo (Label (WithInv Act) Test)} {n : ℕ}
+    {V : Set Var} {𝓘 : Inv}
+    (h : ThreadLocal p V 𝓘) (hmem : α ∈ p) : Pcol.ThreadLocal (α.trunc n) V 𝓘 := by
+  intro x ⟨hx, _⟩; by_cases hlev : α.rel.lev x < n
+  · conv => arg 2; exact if_pos hlev
+    exact h α hmem x hx
+  · conv => arg 2; exact if_neg hlev
+    trivial
+
+end ThreadLocal
 
 open OmegaCompletePartialOrder
 
@@ -109,31 +45,39 @@ lemma ωSup_mul (f g : Chain ENNReal) :
      } := by sorry
 
 theorem par_comp
-    {σ₁ : Mem} {σ₂ : Mem} {τ τ₁ τ₂ : Mem} {𝓘 : Inv}
+    {σ₁ : Mem} {σ₂ : Mem} {τ τ₁ τ₂ : Mem} {𝓘 : Inv} {A B : Set Mem}
     (hτ : 𝓘.prop τ) (hτ₁ : 𝓘.prop τ₁) (hτ₂ : 𝓘.prop τ₂)
     (p q : Pom (Label (WithInv Act) Test))
     (hinv₁ : p.HasInv 𝓘) (hinv₂ : q.HasInv 𝓘)
+    (hloc₁ : Pom.ThreadLocal p σ₁.dom 𝓘) (hloc₂ : Pom.ThreadLocal q σ₂.dom 𝓘)
+    (hA : ∀ σ ∈ A, Mem.dom σ = σ₁.dom) (hB : ∀ σ ∈ B, Mem.dom σ = σ₂.dom)
     (hd₁ : Disjoint τ.dom σ₁.dom) (hd₂ : Disjoint τ.dom σ₂.dom)
     (hd : Disjoint σ₁.dom σ₂.dom) :
     ConvexPowerset.minProb
-      (Pom.lin (Pom.Semantics.par p q) (σ₁.union (σ₂.union τ)))
+      (𝓛 (Pom.Semantics.par p q) (σ₁.union (σ₂.union τ)))
       (Mem.sep A (Mem.sep B 𝓘.prop)) ≥
-      ConvexPowerset.minProb (Pom.lin p (σ₁.union τ₁)) (Mem.sep A 𝓘.prop) *
-      ConvexPowerset.minProb (Pom.lin q (σ₂.union τ₂)) (Mem.sep B 𝓘.prop) := by
+    ConvexPowerset.minProb (𝓛 p (σ₁.union τ₁)) (Mem.sep A 𝓘.prop) *
+    ConvexPowerset.minProb (𝓛 q (σ₂.union τ₂)) (Mem.sep B 𝓘.prop) := by
+  -- Get a canonical Lpo representation of the parallel composition
   obtain ⟨α, β, x, hx, hx', hdn, rfl, rfl, hmem⟩ := Pom.exists_rep_par Label.fork_ne_bot p q
+  -- Rewrite the linearizations in terms of suprema of finite Lpos
   unfold Pom.Semantics.par; rw [hmem, Pom.lin_mk, Pom.lin_mk, Pom.lin_mk]
+  -- Convert the truncation of parallel compositions into a parallel composition of truncations
   rw [Chain.ωSup_shift]; simp only [Chain.shift, DFunLike.coe]
   conv in Lpo.trunc _ _ => exact par_trunc _
+  -- Apply Scott Continuity of `minProb` to move the suprema to the outside
   conv => lhs; exact (ConvexPowerset.minProb_ωScottContinuous _).map_ωSup _
   conv => rhs; lhs; exact (ConvexPowerset.minProb_ωScottContinuous _).map_ωSup _
   conv => rhs; rhs; exact (ConvexPowerset.minProb_ωScottContinuous _).map_ωSup _
   conv => rhs; exact ωSup_mul _ _
+  -- Apply `Lpofin.par_comp` for each level in the chains
   refine ωSup_le_ωSup_of_le fun n ↦ ⟨n, ?_⟩
-  exact Lpofin.par_comp _ _ _ A B hτ hτ₁ hτ₂
+  refine par_comp_fin_local
     (hinv₁.to_lpo_trunc rfl)
     (hinv₂.to_lpo_trunc rfl)
-    hd₁ hd₂ hd
-
+    (hloc₁.to_lpo_trunc rfl)
+    (hloc₂.to_lpo_trunc rfl)
+    hA hB hτ hτ₁ hτ₂ hd₁ hd₂ hd
 
 end Pom
 

@@ -19,19 +19,6 @@ def wp (𝓘 : Inv) (c : Cmd Act) (ψ : OProp) : OProp :=
       -- Then `ν` refines some probability space `𝓠`, which satisfies the postcondition `ψ`
         ∃ 𝓠, ((𝓠 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν) ∧ ψ 𝓠
 
-lemma ConvexPowerset.mem_bind {α β : Type} {s : ConvexPowerset α}
-    {k : α → ConvexPowerset β} {ν : Distr β} :
-    ν ∈ s >>= k ↔
-    ∃ μ ∈ s,
-      ∃ f ∈ μ.support.pi fun x ↦ Option.elim x Set.univ (ConvexPowerset.set ∘ k),
-        ν = μ.bind f := by
-  constructor
-  · rintro ⟨⟨ξ, f⟩, ⟨_, ⟨_, rfl⟩, _, ⟨hξ, rfl⟩, rfl, hf⟩, rfl⟩
-    refine ⟨ξ, hξ, f, hf, ?_⟩; rfl
-  · rintro ⟨ξ, hξ, f, hf, rfl⟩; refine ⟨⟨ξ, f⟩, ?_⟩
-    simp only [Set.mem_iUnion, exists_prop, Function.uncurry_apply_pair]
-    exact ⟨⟨ξ, hξ, Set.mem_singleton _, hf⟩, True.intro⟩
-
 lemma wp_weaken {𝓘 : Inv} {c : Cmd Act} {φ ψ : OProp}
     (h : φ ⊢ ψ) : wp 𝓘 c φ ⊢ wp 𝓘 c ψ := by
   intro 𝓟 hc μ 𝓟fr hre ν hν
@@ -100,6 +87,11 @@ lemma wp_share {𝓘 : Inv} {c : Cmd Act} {ψ : OProp} :
   · sorry
   · refine ⟨_, _, le_refl _, hψ, sorry⟩
 
+lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
+    (hψ₁ : ψ₁.Precise) (hψ₂ : ψ₂.Precise) :
+    wp 𝓘 c₁ ψ₁ ∗ wp 𝓘 c₂ ψ₂ ⊢ wp 𝓘 (c₁.par c₂) iprop(ψ₁ ∗ ψ₂) := by
+  intro 𝓟 ⟨𝓟₁, 𝓟₂, hle, h₁, h₂⟩ μ 𝓟fr hre ν hν
+  sorry
 
 lemma wp_assign {𝓘 : Inv} (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
   (OProp.sure ($ x == Expr.literal v) ∗ (OProp.sure ($ x == (fun σ ↦ e (σ.extend x v))) -∗ ψ)) ⊢

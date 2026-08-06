@@ -16,7 +16,7 @@ def extend (σ : Mem) (x : Var) (v : Val) : Mem :=
 def dom (σ : Mem) : Set Var := { x | σ x ≠ none }
 
 open Classical in
-noncomputable def restrict (σ : Mem) (X : Set Var) :=
+noncomputable def restrict (σ : Mem) (X : Set Var) : Mem:=
   fun x ↦ if x ∈ X then σ x else none
 
 lemma restrict_dom (σ : Mem) (X : Set Var) : Mem.dom (σ.restrict X) = σ.dom ∩ X := by

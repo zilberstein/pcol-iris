@@ -165,7 +165,7 @@ instance : DCPO Inv where
 
 lemma ge_of_subset {𝓘 𝓙 : Inv} (hle : 𝓘 ≤ 𝓙) :
     𝓙.prop = fun σ ↦ ∃ τ : Mem, σ = τ.restrict 𝓙.dom ∧ 𝓘.prop τ := by
-  ext σ; rw [hle.2]; rfl
+  ext σ; rw [hle.2]
 
 /-- The supremum of a directed set of invariants is attained: it is a member of the set. -/
 lemma dSup_mem (d : DSet Inv) : ∃ L ∈ d, d.dSup = L := by
