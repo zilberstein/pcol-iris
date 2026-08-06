@@ -2,6 +2,8 @@
 Copyright (c) 2026 Noam Zilberstein. All rights reserved.
 Authors: Noam Zilberstein
 -/
+import PcolIris.Logic.LemmaC6
+import PcolIris.OProp.ProbSpaceLemmas
 import PcolIris.Semantics.Invariant
 import PcolIris.Semantics.Semantics
 import PcolIris.OProp.OProp
@@ -87,11 +89,37 @@ lemma wp_share {𝓘 : Inv} {c : Cmd Act} {ψ : OProp} :
   · sorry
   · refine ⟨_, _, le_refl _, hψ, sorry⟩
 
+/-- The parallel composition rule; see `PcolIris/Logic/WeakestPre.lean` for the same proof
+in the refactored development. -/
 lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
     (hψ₁ : ψ₁.Precise) (hψ₂ : ψ₂.Precise) :
     wp 𝓘 c₁ ψ₁ ∗ wp 𝓘 c₂ ψ₂ ⊢ wp 𝓘 (c₁.par c₂) iprop(ψ₁ ∗ ψ₂) := by
   intro 𝓟 ⟨𝓟₁, 𝓟₂, hle, h₁, h₂⟩ μ 𝓟fr hre ν hν
-  sorry
+  obtain ⟨𝓠₁, hQ₁⟩ := hψ₁
+  obtain ⟨𝓠₂, hQ₂⟩ := hψ₂
+  refine ⟨𝓠₁ ⊗ 𝓠₂, ?_,
+    ⟨𝓠₁, 𝓠₂, le_refl _, (hQ₁ 𝓠₁).mp (le_refl _), (hQ₂ 𝓠₂).mp (le_refl _)⟩⟩
+  have hμ : ((𝓟₁ ⊗ 𝓟₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ) :=
+    Distr.Refines.mono
+      (ProbSpace.product_mono_left (ProbSpace.product_mono_left hle)) hre
+  have hthread₁ : ∀ (𝓕 : ProbSpace Mem) (μ₁ : Distr Mem),
+      ((𝓟₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ₁) →
+      ∀ ν₁ ∈ ConvexPowerset.singleton' μ₁ >>= 𝓛 (c₁.withInv 𝓘).to_pom,
+        ((𝓠₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν₁) := by
+    intro 𝓕 μ₁ hre₁ ν₁ hν₁
+    obtain ⟨𝓠, href, hψ⟩ := h₁ μ₁ 𝓕 hre₁ ν₁ hν₁
+    exact Distr.Refines.mono
+      (ProbSpace.product_mono_left (ProbSpace.product_mono_left ((hQ₁ 𝓠).mpr hψ))) href
+  have hthread₂ : ∀ (𝓕 : ProbSpace Mem) (μ₂ : Distr Mem),
+      ((𝓟₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ₂) →
+      ∀ ν₂ ∈ ConvexPowerset.singleton' μ₂ >>= 𝓛 (c₂.withInv 𝓘).to_pom,
+        ((𝓠₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν₂) := by
+    intro 𝓕 μ₂ hre₂ ν₂ hν₂
+    obtain ⟨𝓠, href, hψ⟩ := h₂ μ₂ 𝓕 hre₂ ν₂ hν₂
+    exact Distr.Refines.mono
+      (ProbSpace.product_mono_left (ProbSpace.product_mono_left ((hQ₂ 𝓠).mpr hψ))) href
+  rw [Cmd.withInv, Cmd.to_pom] at hν
+  exact fun {_} hE ↦ lemma_C6 hμ hthread₁ hthread₂ ν hν hE
 
 lemma wp_assign {𝓘 : Inv} (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
   (OProp.sure ($ x == Expr.literal v) ∗ (OProp.sure ($ x == (fun σ ↦ e (σ.extend x v))) -∗ ψ)) ⊢

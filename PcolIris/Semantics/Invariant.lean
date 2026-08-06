@@ -220,12 +220,44 @@ instance {act : Type} : PartialOrder (WithInv act) where
     · exact hle.1
     · exact le_antisymm hle.2 hle'.2
 
+namespace WithInv
+
+/-- The action component is monotone. -/
+lemma inv_monotone {act : Type} : Monotone (fun a : WithInv act ↦ a.inv) :=
+  fun _ _ hle ↦ hle.2
+
+/-- The invariants occurring in a directed set of annotated actions form a directed set. -/
+def invs {act : Type} (d : DSet (WithInv act)) : DSet Inv :=
+  d.image (fun a ↦ a.inv) inv_monotone
+
+/-- All the elements of a directed set of annotated actions carry the same action. -/
+lemma action_eq_of_mem {act : Type} (d : DSet (WithInv act)) {a : WithInv act} (ha : a ∈ d) :
+    a.action = d.nonempty.choose.action := by
+  obtain ⟨c, _, hle₁, hle₂⟩ := d.directed a ha _ d.nonempty.choose_spec
+  rw [hle₁.1, ← hle₂.1]
+
+end WithInv
+
 noncomputable instance {act : Type} : DCPO (WithInv act) where
-  dSup d := sorry
-  lubOfDirected d := sorry
+  dSup d := ⟨d.nonempty.choose.action, (WithInv.invs d).dSup⟩
+  lubOfDirected d := by
+    constructor
+    · intro a ha
+      exact ⟨WithInv.action_eq_of_mem d ha, DSet.le_dSup (Set.mem_image_of_mem _ ha)⟩
+    · intro u hu
+      refine ⟨(hu d.nonempty.choose_spec).1, DSet.dSup_le ?_⟩
+      rintro _ ⟨a, ha, rfl⟩
+      exact (hu ha).2
 
 instance {act : Type} : ScottCompact (WithInv act) where
-  scottCompact _ := by sorry
+  scottCompact a := by
+    intro d hle
+    obtain ⟨j, hj, hjle⟩ :=
+      ScottCompact.scottCompact a.inv (WithInv.invs d) hle.2
+    obtain ⟨z, hz, rfl⟩ := (Set.mem_image _ _ _).mp hj
+    refine ⟨z, hz, ?_, hjle⟩
+    rw [hle.1]
+    exact (WithInv.action_eq_of_mem d hz).symm
 
 noncomputable instance semWithAct {act : Type} [Sem act Mem (ConvexPowerset Mem)] :
     Sem (WithInv act) Mem (ConvexPowerset Mem) where

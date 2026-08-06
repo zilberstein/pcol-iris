@@ -42,9 +42,17 @@ instance : HSub Expr Expr Expr where hSub e₁ e₂ σ := HSub.hSub <$> e₁ σ 
 instance : HMul Expr Expr Expr where hMul e₁ e₂ σ := HMul.hMul <$> e₁ σ <*> e₂ σ
 instance : HDiv Expr Expr Expr where hDiv e₁ e₂ σ := HDiv.hDiv <$> e₁ σ <*> e₂ σ
 
-def Bern (e : Expr) : PExpr := sorry
+/-- The Bernoulli sampling expression: `Bern e` samples `1` with probability `e σ` (clamped
+to the unit interval) and `0` otherwise.  It is undefined wherever `e` is. -/
+noncomputable def Bern (e : Expr) : PExpr := fun σ ↦
+  (e σ).map fun p ↦
+    let q : ENNReal := min 1 (ENNReal.ofReal (p : ℝ))
+    (PMF.ofFintype (fun b : Bool ↦ if b then q else 1 - q) (by
+      have hq : q ≤ 1 := min_le_left _ _
+      simp [add_tsub_cancel_of_le hq])).map
+      (fun b ↦ if b then (1 : Val) else 0)
 
-def example_prog : Cmd Act :=
+noncomputable def example_prog : Cmd Act :=
   "x" ::= 0 ⨟
   "i" ::= 0 ⨟
   while( $"b" ){

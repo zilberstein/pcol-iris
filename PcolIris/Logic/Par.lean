@@ -38,11 +38,21 @@ lemma par_trunc {x : Node} {α β : Lpo (Label (WithInv Act) Test)}
       (fun h ↦ hx' <| (β.trunc_le n).nodes h)
       (hd.mono (α.trunc_le n).nodes (β.trunc_le n).nodes) := Subtype.ext <| Lpo.par_trunc n
 
+/-- The supremum of a chain of products is the product of the suprema. -/
 lemma ωSup_mul (f g : Chain ENNReal) :
     ωSup f * ωSup g = ωSup {
       toFun n := f n * g n
-      monotone' := sorry
-     } := by sorry
+      monotone' := fun _ _ hab ↦ mul_le_mul' (f.monotone hab) (g.monotone hab)
+     } := by
+  show (⨆ n, f n) * (⨆ n, g n) = ⨆ n, f n * g n
+  rw [ENNReal.iSup_mul]
+  refine le_antisymm (iSup_le fun i ↦ ?_) (iSup_le fun n ↦ ?_)
+  · rw [ENNReal.mul_iSup]
+    refine iSup_le fun j ↦ ?_
+    refine le_trans (mul_le_mul' (f.monotone (le_max_left i j)) (g.monotone (le_max_right i j))) ?_
+    exact le_iSup (fun n ↦ f n * g n) (max i j)
+  · exact le_trans (mul_le_mul' le_rfl (le_iSup (fun m ↦ g m) n))
+      (le_iSup (fun i ↦ f i * ⨆ m, g m) n)
 
 theorem par_comp
     {σ₁ : Mem} {σ₂ : Mem} {τ τ₁ τ₂ : Mem} {𝓘 : Inv} {A B : Set Mem}
