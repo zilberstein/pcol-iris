@@ -41,17 +41,17 @@ and distributions, which needs the (currently unfinished) definitions of
 `ProbSpace.trivial` and `ProbSpace.sum` in `PcolIris/OProp/ProbSpace.lean`. -/
 theorem lemma_C6 {𝓘 : Inv} {p₁ p₂ : Pom (Label (WithInv Act) Test)}
     {𝓟₁ 𝓟₂ 𝓠₁ 𝓠₂ 𝓟fr : ProbSpace} {μ : Distr Mem}
-    (hμ : ((𝓟₁ ⊗ 𝓟₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ))
+    (hμ : ((𝓟₁ ⊗ 𝓟₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ))
     (h₁ : ∀ (𝓕 : ProbSpace) (μ₁ : Distr Mem),
-      ((𝓟₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ₁) →
+      ((𝓟₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ₁) →
       ∀ ν₁ ∈ ConvexPowerset.singleton' μ₁ >>= 𝓛 p₁,
-        ((𝓠₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν₁))
+        ((𝓠₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ ν₁))
     (h₂ : ∀ (𝓕 : ProbSpace) (μ₂ : Distr Mem),
-      ((𝓟₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ₂) →
+      ((𝓟₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ₂) →
       ∀ ν₂ ∈ ConvexPowerset.singleton' μ₂ >>= 𝓛 p₂,
-        ((𝓠₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν₂)) :
+        ((𝓠₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ ν₂)) :
     ∀ ν ∈ ConvexPowerset.singleton' μ >>= 𝓛 (Pom.Semantics.par p₁ p₂),
-      ((𝓠₁ ⊗ 𝓠₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν) := by
+      ((𝓠₁ ⊗ 𝓠₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ ν) := by
   sorry
 
 end Pcol

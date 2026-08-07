@@ -2,24 +2,13 @@
 Copyright (c) 2026 Noam Zilberstein. All rights reserved.
 Authors: Noam Zilberstein
 -/
-import PcolIris.Logic.LemmaC6
+import PcolIris.Logic.WeakestPre
 import PcolIris.OProp.ProbSpaceLemmas
 import PcolIris.Semantics.Invariant
 import PcolIris.Semantics.Semantics
 import PcolIris.OProp.OProp
 
 namespace Pcol
-
-def wp (𝓘 : Inv) (c : Cmd Act) (ψ : OProp) : OProp :=
-  fun 𝓟 ↦
-    ∀ (μ : Distr Mem) (𝓟fr : ProbSpace),
-      -- The initial distribution `μ` is a refinement of the precondition
-      -- `𝓟`, the frame `𝓟fr`, and the invariant `𝓘`
-      ((𝓟 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ) →
-      -- Take any `ν` that results from running the program
-      ∀ ν ∈ ConvexPowerset.singleton' μ >>= 𝓛 (c.withInv 𝓘).to_pom,
-      -- Then `ν` refines some probability space `𝓠`, which satisfies the postcondition `ψ`
-        ∃ 𝓠, ((𝓠 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν) ∧ ψ 𝓠
 
 lemma wp_weaken {𝓘 : Inv} {c : Cmd Act} {φ ψ : OProp}
     (h : φ ⊢ ψ) : wp 𝓘 c φ ⊢ wp 𝓘 c ψ := by
@@ -46,37 +35,21 @@ lemma wp_seq {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ : OProp} :
   refine h' ξ 𝓟fr href' _ ?_
   exact ConvexPowerset.mem_bind.mpr ⟨ξ, ConvexPowerset.self_mem_singleton' _, f, hf, rfl⟩
 
-lemma wp_if_true {𝓘 : Inv} {b : Expr} {c₁ c₂ : Cmd Act} {φ ψ : OProp}
-    (hb : φ ⊢ OProp.sure fun σ ↦ b σ = some 1)
-    (h : φ ⊢ wp 𝓘 c₁ ψ) :
-    φ ⊢ wp 𝓘 (Cmd.if_stmt b c₁ c₂) ψ := by
-  intro 𝓟 hφ μ 𝓟fr href ν hν; rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_if_stmt] at hν
-  rcases ConvexPowerset.mem_bind.mp hν with ⟨ξ, hξ, f, hf, rfl⟩; clear hν
-  obtain ⟨μ, rfl⟩ := PMF.to_distr_inv href.bot_0
-  have heq : ξ = μ.to_distr := by sorry
-  subst heq; clear hξ
-  refine h 𝓟 hφ _ 𝓟fr href _ ?_
-  refine ConvexPowerset.mem_bind.mpr ⟨_, ConvexPowerset.self_mem_singleton' _, f, ?_, rfl⟩
-  simp only [Set.mem_pi, PMF.mem_support_iff, ne_eq]; intro σ hsupp
-  cases σ with
-  | bot =>
-    exfalso; apply hsupp; rfl
-  | coe σ =>
-    simp only [Option.elim, Function.comp_apply]
-    have hf := Set.mem_pi.mp hf _ hsupp; simp only [Option.elim, Function.comp_apply] at hf
-    have heq :
-        Linearization.Sem.sem (Test.lift b) σ =
-        (pure Bool.true : ConvexPowerset Bool) := sorry
-    simp only [heq, pure_bind, cond_true] at hf; exact hf
-
-def Expr.equals (e₁ e₂ : Expr) : Mem → Prop :=
-  fun σ ↦ (e₁ σ).isSome ∧ e₁ σ = e₂ σ
+def Expr.equals (e₁ e₂ : Expr) : MProp := {
+  prop σ := (e₁ σ).isSome ∧ e₁ σ = e₂ σ
+  upcl := sorry
+}
 infixr:66 " == " => Expr.equals
+
+lemma wp_if_true {𝓘 : Inv} {b : Expr} {c₁ c₂ : Cmd Act} {φ ψ : OProp} :
+     ⌈b == Expr.literal 1⌉ ∧ wp 𝓘 c₁ ψ ⊢ wp 𝓘 (Cmd.if_stmt b c₁ c₂) ψ := by
+  intro 𝓟 ⟨htrue, hwp⟩ μ 𝓟fr href ν hν; rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_if_stmt] at hν
+  sorry
 
 -- This mostly follows from invariant monotonicity, but we need a few more properties about
 -- assertions, etc
 lemma wp_share {𝓘 : Inv} {c : Cmd Act} {ψ : OProp} :
-    OProp.sure 𝓘.prop ∗ wp 𝓘 c ψ ⊢ wp Inv.emp c iprop(ψ ∗ OProp.sure 𝓘.prop) := by
+    OProp.sure 𝓘.to_MProp ∗ wp 𝓘 c ψ ⊢ wp Inv.emp c iprop(ψ ∗ OProp.sure 𝓘.to_MProp) := by
   intro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, h𝓘, hwp⟩ μ 𝓟fr hre ν hν
   have hν' : ν ∈ ConvexPowerset.singleton' μ >>= Pom.lin (c.withInv 𝓘).to_pom := by
     refine le_iff_supset.mp ?_ hν
@@ -85,7 +58,7 @@ lemma wp_share {𝓘 : Inv} {c : Cmd Act} {ψ : OProp} :
     apply Cmd.withInv_monotone; refine ⟨Set.empty_subset _, ?_⟩
     intro σ; sorry
   have ⟨𝓠, hre', hψ⟩ := hwp μ 𝓟fr sorry ν sorry
-  refine ⟨𝓠 ⊗ ProbSpace.trivial 𝓘.prop, ?_, ?_⟩
+  refine ⟨𝓠 ⊗ ProbSpace.trivial 𝓘.to_MProp, ?_, ?_⟩
   · sorry
   · refine ⟨_, _, ?_, le_refl _, hψ, ?_⟩
     · -- Need some lemmas about domain being contractive after `wp`

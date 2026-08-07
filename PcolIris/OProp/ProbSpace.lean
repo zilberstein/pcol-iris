@@ -1,6 +1,7 @@
 import Mathlib.MeasureTheory.Measure.ProbabilityMeasure
 import Mathlib.MeasureTheory.Measure.FiniteMeasureProd
 
+import PcolIris.OProp.MProp
 import PcolIris.Semantics.Mem
 
 namespace Pcol
@@ -12,11 +13,14 @@ structure ProbSpace : Type where
   dom : Set Var
   state : ℕ → Mem
   dom_valid : ∀ i, (state i).dom = dom
+  complete : @MeasureTheory.NullMeasurableSpace _ mspace μ
 
 namespace ProbSpace
 
+
+
 -- The trivial/dirac measure centered on the set `P`
-def trivial (P : Mem → Prop) : ProbSpace := sorry
+def trivial (P : MProp) : ProbSpace := sorry
 
 noncomputable def product (p : ProbSpace) (q : ProbSpace) : ProbSpace := {
   mspace := (p.mspace.prod q.mspace).map Nat.pairEquiv
@@ -37,6 +41,7 @@ noncomputable def product (p : ProbSpace) (q : ProbSpace) : ProbSpace := {
   dom_valid := by
     intro n; let ⟨i, j⟩ := Nat.pairEquiv.symm n; simp only
     rw [Mem.dom_union, p.dom_valid i, q.dom_valid j]
+  complete := sorry
 }
 
 infixl:35 " ⊗ " => product
@@ -63,6 +68,7 @@ def sum {ι : Type} (ξ : PMF ι) (𝓟 : ι → ProbSpace) (V : Set Var)
   state n := sorry
   dom := V
   dom_valid := sorry
+  complete := sorry
 }
 
 structure LE_ProbSpace (p q : ProbSpace) : Prop where

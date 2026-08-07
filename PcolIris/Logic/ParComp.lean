@@ -54,7 +54,7 @@ lemma minProb_lin_rec_le_lin_node {a : Lpofin (Label (WithInv Act) Test)} {s : F
   have hne : Lpofin.next a s φ ≠ ∅ := fun h ↦ by rw [h] at hx; exact absurd hx (by simp)
   have hnonempty : Nonempty ↑(Lpofin.next a s φ) := by exact ⟨⟨x, hx⟩⟩
   rw [Lpofin.lin_rec, if_neg hne]
-  rw [show (Nondet.nondet (fun y : ↑(Lpofin.next a s φ) ↦
+  rw [show (Nondet.nondet (fun y : ↑(Lpofin.next a s φ) =>
         Lpofin.lin_node a s φ y.val (Finset.mem_filter.mp y.property).2.1 st) :
       ConvexPowerset Mem) = ConvexPowerset.nondet _ from dif_pos hnonempty]
   rw [minProb_nondet]
@@ -153,7 +153,7 @@ theorem lin_rec_par_mul
         exact ⟨⟨y, hy⟩⟩
       have hunfold : Lpofin.lin_rec (Lpofin.par hr₁ hr₂ hdn) (s₁ ∪ s₂) (φ₁.and φ₂) m
           = ConvexPowerset.nondet
-              (fun y : ↑(Lpofin.next (Lpofin.par hr₁ hr₂ hdn) (s₁ ∪ s₂) (φ₁.and φ₂)) ↦
+              (fun y : ↑(Lpofin.next (Lpofin.par hr₁ hr₂ hdn) (s₁ ∪ s₂) (φ₁.and φ₂)) =>
                 Lpofin.lin_node (Lpofin.par hr₁ hr₂ hdn) (s₁ ∪ s₂) (φ₁.and φ₂) y.val
                   (Finset.mem_filter.mp y.property).2.1 m) := by
         rw [Lpofin.lin_rec, if_neg hE]

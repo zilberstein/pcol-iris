@@ -12,11 +12,11 @@ def wp (𝓘 : Inv) (c : Cmd Act) (ψ : OProp) : OProp :=
     ∀ (μ : Distr Mem) (𝓟fr : ProbSpace),
       -- The initial distribution `μ` is a refinement of the precondition
       -- `𝓟`, the frame `𝓟fr`, and the invariant `𝓘`
-      ((𝓟 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ) →
+      ((𝓟 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ) →
       -- Take any `ν` that results from running the program
       ∀ ν ∈ ConvexPowerset.singleton' μ >>= 𝓛 (c.withInv 𝓘).to_pom,
       -- Then `ν` refines some probability space `𝓠`, which satisfies the postcondition `ψ`
-        ∃ 𝓠, ((𝓠 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν) ∧ ψ 𝓠
+        ∃ 𝓠, ((𝓠 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ ν) ∧ ψ 𝓠
 
 /-- **The parallel composition rule.**  If the postconditions `ψ₁` and `ψ₂` are precise, then
 the weakest preconditions of two threads can be combined with the separating conjunction.
@@ -37,23 +37,23 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
   refine ⟨𝓠₁ ⊗ 𝓠₂, ?_,
     ⟨𝓠₁, 𝓠₂, sorry, le_refl _, (hQ₁ 𝓠₁).mp (le_refl _), (hQ₂ 𝓠₂).mp (le_refl _)⟩⟩
   -- The initial distribution refines the two preconditions, the frame and the invariant
-  have hμ : ((𝓟₁ ⊗ 𝓟₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ) :=
+  have hμ : ((𝓟₁ ⊗ 𝓟₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ) :=
     Distr.Refines.mono
       (ProbSpace.product_mono_left (ProbSpace.product_mono_left hle)) hre
   -- Each thread, run in isolation with an arbitrary frame, establishes its postcondition;
   -- by precision, the least such postcondition space is `𝓠ₖ`
   have hthread₁ : ∀ (𝓕 : ProbSpace) (μ₁ : Distr Mem),
-      ((𝓟₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ₁) →
+      ((𝓟₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ₁) →
       ∀ ν₁ ∈ ConvexPowerset.singleton' μ₁ >>= 𝓛 (c₁.withInv 𝓘).to_pom,
-        ((𝓠₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν₁) := by
+        ((𝓠₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ ν₁) := by
     intro 𝓕 μ₁ hre₁ ν₁ hν₁
     obtain ⟨𝓠, href, hψ⟩ := h₁ μ₁ 𝓕 hre₁ ν₁ hν₁
     exact Distr.Refines.mono
       (ProbSpace.product_mono_left (ProbSpace.product_mono_left ((hQ₁ 𝓠).mpr hψ))) href
   have hthread₂ : ∀ (𝓕 : ProbSpace) (μ₂ : Distr Mem),
-      ((𝓟₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ₂) →
+      ((𝓟₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ₂) →
       ∀ ν₂ ∈ ConvexPowerset.singleton' μ₂ >>= 𝓛 (c₂.withInv 𝓘).to_pom,
-        ((𝓠₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν₂) := by
+        ((𝓠₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ ν₂) := by
     intro 𝓕 μ₂ hre₂ ν₂ hν₂
     obtain ⟨𝓠, href, hψ⟩ := h₂ μ₂ 𝓕 hre₂ ν₂ hν₂
     exact Distr.Refines.mono

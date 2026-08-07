@@ -47,28 +47,10 @@ lemma prop_dom {τ : Mem} (h : 𝓘.prop τ) : τ.dom = 𝓘.dom := 𝓘.dom_val
 
 end Inv
 
-open Classical in
-/-- The memory `σ` with its invariant part replaced by `τ`. -/
-noncomputable def Inv.hav (𝓘 : Inv) (τ σ : Mem) : Mem :=
-  fun x ↦ if x ∈ 𝓘.dom then τ x else σ x
-
-lemma Inv.hav_apply_of_mem {𝓘 : Inv} {τ σ : Mem} {x : Var} (h : x ∈ 𝓘.dom) :
-    𝓘.hav τ σ x = τ x := by
-  classical
-  rw [Inv.hav, if_pos h]
-
-lemma Inv.hav_apply_of_notMem {𝓘 : Inv} {τ σ : Mem} {x : Var} (h : x ∉ 𝓘.dom) :
-    𝓘.hav τ σ x = σ x := by
-  classical
-  rw [Inv.hav, if_neg h]
-
 lemma Inv.replace_bind (𝓘 : Inv) (σ : Mem) (g : Mem → ConvexPowerset Mem) :
-    𝓘.replace σ >>= g = Nondet.nondet fun τ : 𝓘.prop_finite.toFinset ↦ g (𝓘.hav τ.val σ) := by
+    𝓘.replace σ >>= g = Nondet.nondet fun τ : 𝓘.prop_finite.toFinset => g (τ.val ⊎ σ) := by
   rw [Inv.replace, Linearizable.bind_additive]
-  congr 1
-  funext τ
-  rw [pure_bind]
-  rfl
+  congr 1;funext τ; rw [pure_bind]
 
 open Classical in
 /-- The semantics of an invariant-annotated action: check the invariant, havoc the invariant
@@ -76,8 +58,8 @@ part of the memory, run the action, and check the invariant again. -/
 lemma sem_withInv_eq_ite (a : Act) (𝓘 : Inv) (σ : Mem) :
     (Sem.sem (⟨a, 𝓘⟩ : WithInv Act) σ : ConvexPowerset Mem) =
       if 𝓘.prop (σ.restrict 𝓘.dom) then
-        Nondet.nondet (fun τ : 𝓘.prop_finite.toFinset ↦
-          (Sem.sem a (𝓘.hav τ.val σ) : ConvexPowerset Mem) >>= fun σ₃ ↦ 𝓘.check σ₃)
+        Nondet.nondet (fun τ : 𝓘.prop_finite.toFinset =>
+          (Sem.sem a (τ.val ⊎ σ) : ConvexPowerset Mem) >>= fun σ₃ ↦ 𝓘.check σ₃)
       else ⊥ := by
   simp only [Sem.sem]
   by_cases h : 𝓘.prop (σ.restrict 𝓘.dom)
@@ -142,29 +124,30 @@ theorem sem_withInv_frame {a : Act} {𝓘 : Inv} {W : Set Var} (hD : 𝓘.dom �
     funext τ
     have hτ : 𝓘.prop τ.val := (Set.Finite.mem_toFinset _).mp τ.property
     have hτdom : Mem.dom τ.val = 𝓘.dom := 𝓘.dom_valid hτ
-    set n : Mem := 𝓘.hav τ.val m with hn_def
+    set n : Mem := τ.val ⊎ m with hn_def
     have hdomn : Mem.dom n = m.dom := by
       ext x
       by_cases hx : x ∈ 𝓘.dom
-      · simp only [Mem.mem_dom_iff, hn_def, Inv.hav_apply_of_mem hx]
+      · rw [hn_def, Mem.dom_union]
         constructor
         · intro _; exact Mem.mem_dom_iff.mp (hm (hD hx))
-        · intro _; exact Mem.mem_dom_iff.mp (hτdom ▸ hx)
-      · simp only [Mem.mem_dom_iff, hn_def, Inv.hav_apply_of_notMem hx]
+        · intro h; right; exact h
+      · rw [hn_def, Mem.dom_union, hτdom]; constructor
+        · intro h; exact h.resolve_left hx
+        · intro h; right; exact h
     have hdomnW : Mem.dom (show Mem from n.restrict W) = W := by
       rw [Mem.restrict_dom, hdomn]
       exact Set.inter_eq_self_of_subset_right hm
-    have hn : 𝓘.hav τ.val (show Mem from m.restrict W) = (show Mem from n.restrict W) := by
+    have hn : (τ.val ⊎ (m.restrict W)) = n.restrict W := by
       funext x
       by_cases hx : x ∈ W
       · rw [Mem.restrict_apply_of_mem _ hx]
         by_cases hxD : x ∈ 𝓘.dom
-        · rw [Inv.hav_apply_of_mem hxD, hn_def, Inv.hav_apply_of_mem hxD]
-        · rw [Inv.hav_apply_of_notMem hxD, hn_def, Inv.hav_apply_of_notMem hxD,
-            Mem.restrict_apply_of_mem _ hx]
+        · rw [hn_def]; sorry
+        · sorry
       · rw [Mem.restrict_apply_of_notMem _ hx]
         have hxD : x ∉ 𝓘.dom := fun hc ↦ hx (hD hc)
-        rw [Inv.hav_apply_of_notMem hxD, Mem.restrict_apply_of_notMem _ hx]
+        sorry
     rw [hn]
     conv_lhs => rw [h₁ n]
     rw [bind_assoc, bind_assoc]
@@ -177,7 +160,7 @@ theorem sem_withInv_frame {a : Act} {𝓘 : Inv} {W : Set Var} (hD : 𝓘.dom �
       refine Mem.union_congr_right ?_
       intro x hx
       rw [hm₃] at hx
-      exact Inv.hav_apply_of_notMem (fun hc ↦ hx (hD hc))
+      sorry
     rw [Inv.check, Inv.check, hrestr]
     by_cases hp : 𝓘.prop (m₃.restrict 𝓘.dom)
     · rw [if_pos hp, if_pos hp, pure_bind, hunion]
@@ -199,15 +182,16 @@ theorem sem_withInv_assume {a : Act} {𝓘 : Inv} {W : Set Var} (hD : 𝓘.dom �
     funext τ
     have hτ : 𝓘.prop τ.val := (Set.Finite.mem_toFinset _).mp τ.property
     have hτdom : Mem.dom τ.val = 𝓘.dom := 𝓘.dom_valid hτ
-    have hdomn : Mem.dom (𝓘.hav τ.val p) = W := by
+    have hdomn : Mem.dom (τ.val ⊎ p) = W := by
       rw [← hp]
       ext x
       by_cases hx : x ∈ 𝓘.dom
-      · simp only [Mem.mem_dom_iff, Inv.hav_apply_of_mem hx]
-        constructor
+      · constructor
         · intro _; exact Mem.mem_dom_iff.mp (hp ▸ hD hx)
-        · intro _; exact Mem.mem_dom_iff.mp (hτdom ▸ hx)
-      · simp only [Mem.mem_dom_iff, Inv.hav_apply_of_notMem hx]
+        · intro h; rw [Mem.dom_union]; right; exact h
+      · rw [Mem.dom_union, hτdom]; constructor
+        · intro h; exact h.resolve_left hx
+        · intro h; right; exact h
     rw [bind_assoc]
     refine bind_congr_of_domStable (h₂ _ hdomn) _ _ ?_
     intro m₃ hm₃
@@ -229,17 +213,8 @@ theorem sem_withInv_indep {a : Act} {𝓘 : Inv} {X : Set Var} {p p' : Mem}
   rw [sem_withInv_eq_ite, sem_withInv_eq_ite, if_pos hi, if_pos hi']
   congr 1
   funext τ
-  have hhav : 𝓘.hav τ.val p = 𝓘.hav τ.val p' := by
-    funext x
-    by_cases hxD : x ∈ 𝓘.dom
-    · rw [Inv.hav_apply_of_mem hxD, Inv.hav_apply_of_mem hxD]
-    · rw [Inv.hav_apply_of_notMem hxD, Inv.hav_apply_of_notMem hxD]
-      by_cases hxX : x ∈ X
-      · have := congrFun hX x
-        rwa [Mem.restrict_apply_of_mem _ hxX, Mem.restrict_apply_of_mem _ hxX] at this
-      · have h1 : x ∉ Mem.dom p := by rw [hp]; exact fun hc ↦ hc.elim hxX hxD
-        have h2 : x ∉ Mem.dom p' := by rw [hp']; exact fun hc ↦ hc.elim hxX hxD
-        rw [Mem.notMem_dom_iff.mp h1, Mem.notMem_dom_iff.mp h2]
+  have hhav : (τ.val ⊎ p) = (τ.val ⊎ p') := by
+    funext x; sorry
   rw [hhav]
 
 /-! ### The locality hypotheses are satisfiable

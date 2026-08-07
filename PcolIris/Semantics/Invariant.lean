@@ -1,3 +1,4 @@
+import PcolIris.OProp.MProp
 import PcolIris.Semantics.Semantics
 
 namespace Pcol
@@ -20,11 +21,25 @@ def emp : Inv where
   dom_finite := Set.finite_empty
   dom_valid := fun h ↦ h
   prop_finite := by
-    refine (Set.finite_singleton (fun _ : Var ↦ none)).subset ?_
+    refine (Set.finite_singleton (fun (_ : Var) ↦ none)).subset ?_
     intro σ hdom; ext1 x
     have := Set.eq_empty_iff_forall_notMem.mp hdom x
     simp only [Mem.dom, ne_eq, Set.mem_setOf_eq, Decidable.not_not] at this;
     exact this
+
+def to_MProp (𝓘 : Inv) : MProp := {
+  prop σ := 𝓘.prop (σ.restrict 𝓘.dom)
+  upcl := by
+    intro σ τ hle h
+    have heq : σ.restrict 𝓘.dom = τ.restrict 𝓘.dom := by
+      funext x; unfold Mem.restrict; by_cases hx : x ∈ 𝓘.dom
+      · simp only [hx, ↓reduceIte]
+        have := 𝓘.dom_valid h ▸ σ.restrict_dom 𝓘.dom; rw [this] at hx
+        have ⟨v, hv⟩ := hx.1 |> Option.ne_none_iff_exists.mp
+        rw [← hv]; symm; have := hv.symm ▸ hle x; exact this
+      · simp only [hx, ↓reduceIte]
+    simpa only [Membership.mem, Set.Mem, ← heq]
+}
 
 instance : LE Inv where
   le 𝓙 𝓘 :=
@@ -198,8 +213,8 @@ lemma check_monotone (σ : Mem) : Monotone (check · σ) := by
 
 open Classical in
 noncomputable def replace (𝓘 : Inv) (σ : Mem) : ConvexPowerset Mem :=
-  Nondet.nondet fun τ : 𝓘.prop_finite.toFinset ↦
-    pure fun x ↦ if x ∈ 𝓘.dom then τ.val x else σ x
+  Nondet.nondet fun (τ : 𝓘.prop_finite.toFinset) ↦
+    pure (τ ⊎ σ)
 
 lemma replace_monotone (σ : Mem) : Monotone (replace · σ) := by
   intro 𝓘 𝓙 hle; simp only [replace]; sorry
@@ -223,7 +238,7 @@ instance {act : Type} : PartialOrder (WithInv act) where
 namespace WithInv
 
 /-- The action component is monotone. -/
-lemma inv_monotone {act : Type} : Monotone (fun a : WithInv act ↦ a.inv) :=
+lemma inv_monotone {act : Type} : Monotone (fun a : WithInv act => a.inv) :=
   fun _ _ hle ↦ hle.2
 
 /-- The invariants occurring in a directed set of annotated actions form a directed set. -/

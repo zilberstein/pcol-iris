@@ -1,5 +1,6 @@
 import Iris
 
+import PcolIris.OProp.MProp
 import PcolIris.OProp.ProbSpace
 
 namespace Pcol
@@ -10,14 +11,24 @@ abbrev Event := Set Mem
 
 namespace OProp
 
+def sure (P : MProp) : OProp :=
+  fun 𝓟 ↦ 𝓟.support ⊆ 𝓟.state ⁻¹' P.prop
+
+notation "⌈" P "⌉" => sure P
+
 def hasProb (A : Event) (q : ENNReal) : OProp :=
   fun (𝓟 : ProbSpace) ↦
     (𝓟.state ⁻¹' A) ∈ 𝓟 ∧
     𝓟.μ (𝓟.state ⁻¹' A) = q
 
+lemma hasProb_q (A : Event) :
+    hasProb A 1 = fun 𝓟 ↦ ∀ i ∈ 𝓟.support, 𝓟.state i ∈ A := by
+  -- Needs to be a complete probability space, or something
+  funext 𝓟; sorry
+
 instance : Iris.BI.BIBase OProp where
   Entails φ ψ := ∀ m, φ m → ψ m
-  emp := hasProb { Mem.emp } 1
+  emp := ⌈ Iris.BI.BIBase.emp  ⌉
   pure p _ := p
   and φ ψ m := φ m ∧ ψ m
   or φ ψ m := φ m ∨ ψ m
@@ -83,9 +94,6 @@ instance : Iris.BI OProp where
   later_sep := sorry
   later_persistently := sorry
   later_false_em := sorry
-
-def sure (P : Mem → Prop) : OProp :=
-  hasProb P 1
 
 def Precise (φ : OProp) : Prop :=
   ∃ 𝓟 : ProbSpace, ∀ 𝓠, 𝓟 ≤ 𝓠 ↔ φ 𝓠

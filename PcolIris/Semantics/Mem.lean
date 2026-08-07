@@ -69,6 +69,7 @@ def union (σ τ : Mem) : Mem :=
   | some v => v
   | none => τ x
 
+infixl:40 " ⊎ " => union
 
 /-
 Elementary algebra of memories: `Mem.union`, `Mem.restrict` and `Mem.dom`.
