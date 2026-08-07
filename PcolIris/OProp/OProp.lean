@@ -4,16 +4,16 @@ import PcolIris.OProp.ProbSpace
 
 namespace Pcol
 
-def OProp := ProbSpace Mem → Prop
+def OProp := ProbSpace → Prop
 
 abbrev Event := Set Mem
 
 namespace OProp
 
 def hasProb (A : Event) (q : ENNReal) : OProp :=
-  fun p ↦
-    p.mspace.MeasurableSet' (p.state ⁻¹' A) ∧
-    p.μ (p.state ⁻¹' A) = q
+  fun (𝓟 : ProbSpace) ↦
+    (𝓟.state ⁻¹' A) ∈ 𝓟 ∧
+    𝓟.μ (𝓟.state ⁻¹' A) = q
 
 instance : Iris.BI.BIBase OProp where
   Entails φ ψ := ∀ m, φ m → ψ m
@@ -25,8 +25,13 @@ instance : Iris.BI.BIBase OProp where
   sForall p m := ∀ φ, p φ → φ m
   sExists p m := ∃ φ, p φ ∧ φ m
   sep φ ψ m :=
-    ∃ (m₁ m₂ : ProbSpace Mem), m₁.product m₂ ≤ m ∧ φ m₁ ∧ ψ m₂
-  wand φ ψ m := ∀ m₁, φ m₁ → ∃ m₂, m₁.product m₂ ≤ m ∧ ψ m₂
+    ∃ (m₁ m₂ : ProbSpace),
+      Disjoint m₁.dom m₂.dom ∧
+      (m₁ ⊗ m₂) ≤ m ∧
+      φ m₁ ∧
+      ψ m₂
+  wand φ ψ m :=
+    ∀ m₁, φ m₁ → ∃ m₂, Disjoint m₁.dom m₂.dom ∧ (m₁ ⊗ m₂) ≤ m ∧ ψ m₂
   persistently φ := φ
   later φ := φ
 
@@ -83,10 +88,11 @@ def sure (P : Mem → Prop) : OProp :=
   hasProb P 1
 
 def Precise (φ : OProp) : Prop :=
-  ∃ 𝓟 : ProbSpace Mem, ∀ 𝓠, 𝓟 ≤ 𝓠 ↔ φ 𝓠
+  ∃ 𝓟 : ProbSpace, ∀ 𝓠, 𝓟 ≤ 𝓠 ↔ φ 𝓠
 
 def oplus (ξ : PMF Val) (φ : Val → OProp) : OProp :=
-  fun 𝓟 ↦ ∃ 𝓠 h, ProbSpace.sum ξ 𝓠 h ≤ 𝓟 ∧
+  fun 𝓟 ↦ ∃ 𝓠 V h hd,
+    ProbSpace.sum ξ 𝓠 V h hd ≤ 𝓟 ∧
     ∀ v ∈ ξ.support, φ v (𝓠 v)
 
 notation "⨁[ " ξ " ] " φ => oplus ξ φ

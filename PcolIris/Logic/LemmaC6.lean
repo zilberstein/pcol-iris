@@ -40,13 +40,13 @@ the worst-case probabilities of two threads (`Pcol.Pom.par_comp`, Lemma C.5), is
 and distributions, which needs the (currently unfinished) definitions of
 `ProbSpace.trivial` and `ProbSpace.sum` in `PcolIris/OProp/ProbSpace.lean`. -/
 theorem lemma_C6 {𝓘 : Inv} {p₁ p₂ : Pom (Label (WithInv Act) Test)}
-    {𝓟₁ 𝓟₂ 𝓠₁ 𝓠₂ 𝓟fr : ProbSpace Mem} {μ : Distr Mem}
+    {𝓟₁ 𝓟₂ 𝓠₁ 𝓠₂ 𝓟fr : ProbSpace} {μ : Distr Mem}
     (hμ : ((𝓟₁ ⊗ 𝓟₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ))
-    (h₁ : ∀ (𝓕 : ProbSpace Mem) (μ₁ : Distr Mem),
+    (h₁ : ∀ (𝓕 : ProbSpace) (μ₁ : Distr Mem),
       ((𝓟₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ₁) →
       ∀ ν₁ ∈ ConvexPowerset.singleton' μ₁ >>= 𝓛 p₁,
         ((𝓠₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν₁))
-    (h₂ : ∀ (𝓕 : ProbSpace Mem) (μ₂ : Distr Mem),
+    (h₂ : ∀ (𝓕 : ProbSpace) (μ₂ : Distr Mem),
       ((𝓟₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ₂) →
       ∀ ν₂ ∈ ConvexPowerset.singleton' μ₂ >>= 𝓛 p₂,
         ((𝓠₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν₂)) :

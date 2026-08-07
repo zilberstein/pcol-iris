@@ -5,17 +5,20 @@ import PcolIris.Semantics.Mem
 
 namespace Pcol
 
-structure ProbSpace (α : Type*) where
+@[ext]
+structure ProbSpace : Type where
   mspace : MeasurableSpace ℕ
   μ : @MeasureTheory.ProbabilityMeasure ℕ mspace
-  state : ℕ → α
+  dom : Set Var
+  state : ℕ → Mem
+  dom_valid : ∀ i, (state i).dom = dom
 
 namespace ProbSpace
 
 -- The trivial/dirac measure centered on the set `P`
-def trivial (P : Mem → Prop) : ProbSpace Mem := sorry
+def trivial (P : Mem → Prop) : ProbSpace := sorry
 
-noncomputable def product (p : ProbSpace Mem) (q : ProbSpace Mem) : ProbSpace Mem := {
+noncomputable def product (p : ProbSpace) (q : ProbSpace) : ProbSpace := {
   mspace := (p.mspace.prod q.mspace).map Nat.pairEquiv
   μ :=
     @MeasureTheory.ProbabilityMeasure.map _ _
@@ -30,16 +33,21 @@ noncomputable def product (p : ProbSpace Mem) (q : ProbSpace Mem) : ProbSpace Me
   state k :=
     let ⟨i, j⟩ := Nat.pairEquiv.symm k
     Mem.union (p.state i) (q.state j)
+  dom := p.dom ∪ q.dom
+  dom_valid := by
+    intro n; let ⟨i, j⟩ := Nat.pairEquiv.symm n; simp only
+    rw [Mem.dom_union, p.dom_valid i, q.dom_valid j]
 }
 
 infixl:35 " ⊗ " => product
 
-def support {α : Type} (𝓟 : ProbSpace α) : Set ℕ :=
+def support (𝓟 : ProbSpace) : Set ℕ :=
   Set.sInter { E | 𝓟.mspace.MeasurableSet' E ∧ 𝓟.μ E = 1 }
 
-def sum {ι α : Type} (ξ : PMF ι) (𝓟 : ι → ProbSpace α)
-    (h : ∀ {i j : ι}, i ≠ j → Disjoint (𝓟 i).support (𝓟 j).support) :
-    ProbSpace α := {
+def sum {ι : Type} (ξ : PMF ι) (𝓟 : ι → ProbSpace) (V : Set Var)
+    (h : ∀ {i j : ι}, i ≠ j → Disjoint (𝓟 i).support (𝓟 j).support)
+    (hdom : ∀ i : ι, (𝓟 i).dom = V) :
+    ProbSpace := {
   mspace := {
     MeasurableSet' E := ∀ i : ι, (𝓟 i).mspace.MeasurableSet' (E ∩ (𝓟 i).support)
     measurableSet_empty := by
@@ -53,35 +61,50 @@ def sum {ι α : Type} (ξ : PMF ι) (𝓟 : ι → ProbSpace α)
   }
   μ := sorry
   state n := sorry
+  dom := V
+  dom_valid := sorry
 }
 
-structure LE_ProbSpace {α : Type*} (p q : ProbSpace α) : Prop where
+structure LE_ProbSpace (p q : ProbSpace) : Prop where
   mspace : p.mspace ≤ q.mspace
   μ : ∀ E, p.mspace.MeasurableSet' E → p.μ E = q.μ E
-  state : ∀ i, p.state i = q.state i
+  dom : p.dom ⊆ q.dom
+  state : ∀ i, p.state i ≤ q.state i
 
-instance {α : Type*} : LE (ProbSpace α) where
+instance : LE ProbSpace where
   le p q := LE_ProbSpace p q
 
-instance {α : Type*} : Preorder (ProbSpace α) where
-  le_refl p := ⟨le_refl _, fun _ _ ↦ rfl, fun _ ↦ rfl⟩
+instance : Preorder ProbSpace where
+  le_refl p := by
+    constructor
+    · exact le_refl _
+    · intro _ _; rfl
+    · exact Set.Subset.refl _
+    · intro _; exact le_refl _
   le_trans p q r hpq hqr := by
     constructor
     · exact hpq.mspace.trans hqr.mspace
     · intro E hE; apply (hpq.μ E hE).trans
       exact hqr.μ E (hpq.mspace E hE)
+    · exact hpq.dom.trans hqr.dom
     · intro i; exact (hpq.state i).trans <| hqr.state i
+
+instance : Membership (Set ℕ) ProbSpace where
+  mem 𝓟 := 𝓟.mspace.MeasurableSet'
 
 end ProbSpace
 
 namespace Distr
 
-def Refines {α : Type*} (ξ : Distr α) (p : ProbSpace α) : Prop :=
-  ∀ {E}, p.mspace.MeasurableSet' E → p.μ E = ∑' i : E, ξ (p.state i)
+def Refines (ξ : Distr Mem) (𝓟 : ProbSpace) : Prop :=
+  ∃ ξ' : PMF ℕ, ∃ f : ℕ → Mem,
+    (∀ {E}, E ∈ 𝓟 → 𝓟.μ E = ∑' i : E, ξ' i) ∧
+    (∀ i, 𝓟.state i ≤ f i) ∧
+    ξ = ξ'.map (some ∘ f)
 
 namespace Refines
 
-lemma bot_0 {α : Type*} {ξ : Distr α} {p : ProbSpace α}
+lemma bot_0 {ξ : Distr Mem} {p : ProbSpace}
     (h : Distr.Refines ξ p) : ξ ⊥ = 0 := by
     sorry
 

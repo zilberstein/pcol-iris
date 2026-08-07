@@ -84,7 +84,7 @@ lemma prod_measure_eq_right {m n n' : MeasurableSpace ℕ} (hle : n ≤ n')
 
 /-! ### Application of the product measure -/
 
-lemma pairEquiv_aemeasurable (p q : ProbSpace Mem) :
+lemma pairEquiv_aemeasurable (p q : ProbSpace) :
     @AEMeasurable (ℕ × ℕ) ℕ ((p.mspace.prod q.mspace).map Nat.pairEquiv)
       (p.mspace.prod q.mspace) (⇑Nat.pairEquiv)
       (@ProbabilityMeasure.toMeasure (ℕ × ℕ) (p.mspace.prod q.mspace)
@@ -95,7 +95,7 @@ lemma pairEquiv_aemeasurable (p q : ProbSpace Mem) :
 
 /-- The measure of a product space is the product measure of the preimage under the
 pairing bijection. -/
-lemma product_μ_apply (p q : ProbSpace Mem) {E : Set ℕ} (hE : (p ⊗ q).mspace.MeasurableSet' E) :
+lemma product_μ_apply (p q : ProbSpace) {E : Set ℕ} (hE : (p ⊗ q).mspace.MeasurableSet' E) :
     (p ⊗ q).μ E =
       (@ProbabilityMeasure.prod ℕ p.mspace ℕ q.mspace p.μ q.μ) (⇑Nat.pairEquiv ⁻¹' E) :=
   @ProbabilityMeasure.map_apply (ℕ × ℕ) ℕ (p.mspace.prod q.mspace) (p ⊗ q).mspace
@@ -107,7 +107,7 @@ lemma prob_coe {α : Type*} {m : MeasurableSpace α} (P : @ProbabilityMeasure α
     ((P s : NNReal) : ENNReal) = @ProbabilityMeasure.toMeasure α m P s :=
   ProbabilityMeasure.ennreal_coeFn_eq_coeFn_toMeasure P s
 
-lemma prod_coe_apply (p q : ProbSpace Mem) (s : Set (ℕ × ℕ)) :
+lemma prod_coe_apply (p q : ProbSpace) (s : Set (ℕ × ℕ)) :
     (((@ProbabilityMeasure.prod ℕ p.mspace ℕ q.mspace p.μ q.μ) s : NNReal) : ENNReal) =
       (@Measure.prod ℕ ℕ p.mspace q.mspace
         (@ProbabilityMeasure.toMeasure ℕ p.mspace p.μ)
@@ -117,8 +117,8 @@ lemma prod_coe_apply (p q : ProbSpace Mem) (s : Set (ℕ × ℕ)) :
 /-! ### Monotonicity of the product of probability spaces -/
 
 /-- The product of probability spaces is monotone in its left argument. -/
-lemma product_mono_left {p p' q : ProbSpace Mem} (h : p ≤ p') : (p ⊗ q) ≤ (p' ⊗ q) := by
-  refine ⟨MeasurableSpace.map_mono (prod_le_prod_left h.mspace), ?_, ?_⟩
+lemma product_mono_left {p p' q : ProbSpace} (h : p ≤ p') : (p ⊗ q) ≤ (p' ⊗ q) := by
+  refine ⟨MeasurableSpace.map_mono (prod_le_prod_left h.mspace), ?_, ?_, ?_⟩
   · intro E hE
     have hE' : (p' ⊗ q).mspace.MeasurableSet' E :=
       MeasurableSpace.map_mono (prod_le_prod_left h.mspace) E hE
@@ -127,13 +127,14 @@ lemma product_mono_left {p p' q : ProbSpace Mem} (h : p ≤ p') : (p ⊗ q) ≤ 
     rw [prod_coe_apply, prod_coe_apply]
     refine prod_measure_eq_left h.mspace _ _ _ (fun F hF ↦ ?_) _ hE
     rw [← @prob_coe ℕ p.mspace p.μ F, ← @prob_coe ℕ p'.mspace p'.μ F, h.μ F hF]
-  · intro i
-    show Mem.union (p.state _) (q.state _) = Mem.union (p'.state _) (q.state _)
-    rw [h.state]
+  · exact Set.union_subset_union h.dom (Set.Subset.refl _)
+  · intro i x
+    simp only [product, Nat.pairEquiv_apply, Nat.pairEquiv_symm_apply, Mem.union]
+    sorry
 
 /-- The product of probability spaces is monotone in its right argument. -/
-lemma product_mono_right {p q q' : ProbSpace Mem} (h : q ≤ q') : (p ⊗ q) ≤ (p ⊗ q') := by
-  refine ⟨MeasurableSpace.map_mono (prod_le_prod_right h.mspace), ?_, ?_⟩
+lemma product_mono_right {p q q' : ProbSpace} (h : q ≤ q') : (p ⊗ q) ≤ (p ⊗ q') := by
+  refine ⟨MeasurableSpace.map_mono (prod_le_prod_right h.mspace), ?_, ?_, ?_⟩
   · intro E hE
     have hE' : (p ⊗ q').mspace.MeasurableSet' E :=
       MeasurableSpace.map_mono (prod_le_prod_right h.mspace) E hE
@@ -142,12 +143,11 @@ lemma product_mono_right {p q q' : ProbSpace Mem} (h : q ≤ q') : (p ⊗ q) ≤
     rw [prod_coe_apply, prod_coe_apply]
     refine prod_measure_eq_right h.mspace _ _ _ (fun F hF ↦ ?_) _ hE
     rw [← @prob_coe ℕ q.mspace q.μ F, ← @prob_coe ℕ q'.mspace q'.μ F, h.μ F hF]
-  · intro i
-    change Mem.union (p.state _) (q.state _) = Mem.union (p.state _) (q'.state _)
-    rw [h.state]
+  · exact Set.union_subset_union (Set.Subset.refl _) h.dom
+  · intro i x; sorry
 
 /-- The product of probability spaces is monotone. -/
-lemma product_mono {p p' q q' : ProbSpace Mem} (h₁ : p ≤ p') (h₂ : q ≤ q') :
+lemma product_mono {p p' q q' : ProbSpace} (h₁ : p ≤ p') (h₂ : q ≤ q') :
     (p ⊗ q) ≤ (p' ⊗ q') :=
   le_trans (product_mono_left h₁) (product_mono_right h₂)
 
@@ -159,11 +159,12 @@ namespace Refines
 
 /-- Refinement is antitone in the probability space: a distribution that refines `q`
 also refines every probability space that carries less information than `q`. -/
-lemma mono {α : Type*} {ξ : Distr α} {p q : ProbSpace α} (hle : p ≤ q) (h : q ≼ ξ) :
+lemma mono {ξ : Distr Mem} {p q : ProbSpace} (hle : p ≤ q) (h : q ≼ ξ) :
     p ≼ ξ := by
-  intro E hE
-  rw [hle.μ E hE, h (hle.mspace E hE)]
-  exact tsum_congr fun i ↦ by rw [hle.state i]
+  have ⟨ξ', f, hp, hr, heq⟩ := h;
+  refine ⟨ξ', f, ?_, ?_, heq⟩
+  · intro E hE; rw [hle.μ E hE]; exact hp (hle.mspace E hE)
+  · intro i; exact (hle.state i).trans (hr i)
 
 end Refines
 

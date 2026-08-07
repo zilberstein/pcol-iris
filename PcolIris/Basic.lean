@@ -12,7 +12,7 @@ namespace Pcol
 
 def wp (𝓘 : Inv) (c : Cmd Act) (ψ : OProp) : OProp :=
   fun 𝓟 ↦
-    ∀ (μ : Distr Mem) (𝓟fr : ProbSpace Mem),
+    ∀ (μ : Distr Mem) (𝓟fr : ProbSpace),
       -- The initial distribution `μ` is a refinement of the precondition
       -- `𝓟`, the frame `𝓟fr`, and the invariant `𝓘`
       ((𝓟 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ) →
@@ -77,7 +77,7 @@ infixr:66 " == " => Expr.equals
 -- assertions, etc
 lemma wp_share {𝓘 : Inv} {c : Cmd Act} {ψ : OProp} :
     OProp.sure 𝓘.prop ∗ wp 𝓘 c ψ ⊢ wp Inv.emp c iprop(ψ ∗ OProp.sure 𝓘.prop) := by
-  intro 𝓟 ⟨𝓟₁, 𝓟₂, hle, h𝓘, hwp⟩ μ 𝓟fr hre ν hν
+  intro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, h𝓘, hwp⟩ μ 𝓟fr hre ν hν
   have hν' : ν ∈ ConvexPowerset.singleton' μ >>= Pom.lin (c.withInv 𝓘).to_pom := by
     refine le_iff_supset.mp ?_ hν
     apply ConvexPowerset.bind_monotone (le_refl _)
@@ -87,39 +87,11 @@ lemma wp_share {𝓘 : Inv} {c : Cmd Act} {ψ : OProp} :
   have ⟨𝓠, hre', hψ⟩ := hwp μ 𝓟fr sorry ν sorry
   refine ⟨𝓠 ⊗ ProbSpace.trivial 𝓘.prop, ?_, ?_⟩
   · sorry
-  · refine ⟨_, _, le_refl _, hψ, sorry⟩
-
-/-- The parallel composition rule; see `PcolIris/Logic/WeakestPre.lean` for the same proof
-in the refactored development. -/
-lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
-    (hψ₁ : ψ₁.Precise) (hψ₂ : ψ₂.Precise) :
-    wp 𝓘 c₁ ψ₁ ∗ wp 𝓘 c₂ ψ₂ ⊢ wp 𝓘 (c₁.par c₂) iprop(ψ₁ ∗ ψ₂) := by
-  intro 𝓟 ⟨𝓟₁, 𝓟₂, hle, h₁, h₂⟩ μ 𝓟fr hre ν hν
-  obtain ⟨𝓠₁, hQ₁⟩ := hψ₁
-  obtain ⟨𝓠₂, hQ₂⟩ := hψ₂
-  refine ⟨𝓠₁ ⊗ 𝓠₂, ?_,
-    ⟨𝓠₁, 𝓠₂, le_refl _, (hQ₁ 𝓠₁).mp (le_refl _), (hQ₂ 𝓠₂).mp (le_refl _)⟩⟩
-  have hμ : ((𝓟₁ ⊗ 𝓟₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ) :=
-    Distr.Refines.mono
-      (ProbSpace.product_mono_left (ProbSpace.product_mono_left hle)) hre
-  have hthread₁ : ∀ (𝓕 : ProbSpace Mem) (μ₁ : Distr Mem),
-      ((𝓟₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ₁) →
-      ∀ ν₁ ∈ ConvexPowerset.singleton' μ₁ >>= 𝓛 (c₁.withInv 𝓘).to_pom,
-        ((𝓠₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν₁) := by
-    intro 𝓕 μ₁ hre₁ ν₁ hν₁
-    obtain ⟨𝓠, href, hψ⟩ := h₁ μ₁ 𝓕 hre₁ ν₁ hν₁
-    exact Distr.Refines.mono
-      (ProbSpace.product_mono_left (ProbSpace.product_mono_left ((hQ₁ 𝓠).mpr hψ))) href
-  have hthread₂ : ∀ (𝓕 : ProbSpace Mem) (μ₂ : Distr Mem),
-      ((𝓟₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ μ₂) →
-      ∀ ν₂ ∈ ConvexPowerset.singleton' μ₂ >>= 𝓛 (c₂.withInv 𝓘).to_pom,
-        ((𝓠₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.prop) ≼ ν₂) := by
-    intro 𝓕 μ₂ hre₂ ν₂ hν₂
-    obtain ⟨𝓠, href, hψ⟩ := h₂ μ₂ 𝓕 hre₂ ν₂ hν₂
-    exact Distr.Refines.mono
-      (ProbSpace.product_mono_left (ProbSpace.product_mono_left ((hQ₂ 𝓠).mpr hψ))) href
-  rw [Cmd.withInv, Cmd.to_pom] at hν
-  exact fun {_} hE ↦ lemma_C6 hμ hthread₁ hthread₂ ν hν hE
+  · refine ⟨_, _, ?_, le_refl _, hψ, ?_⟩
+    · -- Need some lemmas about domain being contractive after `wp`
+      sorry
+    · -- This should also be a lemma
+      sorry
 
 lemma wp_assign {𝓘 : Inv} (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
   (OProp.sure ($ x == Expr.literal v) ∗ (OProp.sure ($ x == (fun σ ↦ e (σ.extend x v))) -∗ ψ)) ⊢

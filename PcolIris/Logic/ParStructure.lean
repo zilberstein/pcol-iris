@@ -7,7 +7,6 @@ schedule of `α ∥ β` is exactly an interleaving of a schedule of `α` with a 
 -/
 import Pom.Semantics
 
-import PcolIris.Logic.MemUnion
 import PcolIris.Logic.MinProbLemmas
 import PcolIris.Semantics.Invariant
 
