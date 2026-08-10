@@ -32,8 +32,12 @@ instance : PartialOrder Mem where
       · rw [h'] at hle'; contradiction
     · symm; exact hle
 
+def emp : Mem := fun _ ↦ none
+
 def extend (σ : Mem) (x : Var) (v : Val) : Mem :=
   fun y ↦ if x = y then v else σ y
+
+def singleton (x : Var) (v : Val) : Mem := emp.extend x v
 
 def dom (σ : Mem) : Set Var := { x | σ x ≠ none }
 
@@ -57,8 +61,6 @@ lemma restrict_restrict (σ : Mem) (X Y : Set Var) :
   funext x; simp only [restrict, Set.mem_inter_iff]
   by_cases hY : x ∈ Y <;> by_cases hX : x ∈ X <;>
     simp only [hY, ↓reduceIte, hX, Set.mem_inter_iff, and_self, and_true, and_false]
-
-def emp : Mem := fun _ ↦ none
 
 /-- Left-biased union of memories. This operation does not
 require separation-logic style disjointness, that is enforced at the

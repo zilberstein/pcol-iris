@@ -1,13 +1,26 @@
 import PcolIris.Semantics.Mem
 
 namespace Pcol
-
 namespace Expr
 
 def literal (v : ℚ) : Expr := fun _ ↦ v
 def var (x : Var) : Expr := fun σ ↦ σ x
 
 end Expr
+end Pcol
+
+namespace Bool
+open Pcol
+
+def toVal (b : Bool) : Pcol.Val := match b with
+| true => 1
+| false => 0
+
+def toExpr (b : Bool) : Pcol.Expr := Expr.literal b.toVal
+
+end Bool
+
+namespace Pcol
 
 inductive Act : Type where
 | assign : Var →  Expr → Act
@@ -44,21 +57,21 @@ instance : HDiv Expr Expr Expr where hDiv e₁ e₂ σ := HDiv.hDiv <$> e₁ σ 
 
 /-- The Bernoulli sampling expression: `Bern e` samples `1` with probability `e σ` (clamped
 to the unit interval) and `0` otherwise.  It is undefined wherever `e` is. -/
-noncomputable def Bern (e : Expr) : PExpr := fun σ ↦
-  (e σ).map fun p ↦
-    let q : ENNReal := min 1 (ENNReal.ofReal (p : ℝ))
-    (PMF.ofFintype (fun b : Bool ↦ if b then q else 1 - q) (by
-      have hq : q ≤ 1 := min_le_left _ _
-      simp [add_tsub_cancel_of_le hq])).map
-      (fun b ↦ if b then (1 : Val) else 0)
+noncomputable def Bern (p : ℚ) : PMF Val :=
+  let q : ENNReal := min 1 (ENNReal.ofReal (p : ℝ))
+  (PMF.ofFintype (fun b : Bool ↦ if b then q else 1 - q) (by
+    have hq : q ≤ 1 := min_le_left _ _
+    simp [add_tsub_cancel_of_le hq])).map
+    (fun b ↦ if b then (1 : Val) else 0)
+
+noncomputable def PExpr.Bern (e : Expr) : PExpr := fun σ ↦ Pcol.Bern <$> e σ
 
 noncomputable def example_prog : Cmd Act :=
   "x" ::= 0 ⨟
   "i" ::= 0 ⨟
   while( $"b" ){
-    "x" :≈ Bern 0.5 ⨟
+    "x" :≈ PExpr.Bern 0.5 ⨟
     "i" ::= $"i" + 1
   }
-
 
 end Pcol
