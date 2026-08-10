@@ -1,5 +1,6 @@
 import Iris
 
+import PcolIris.Semantics.Syntax
 import PcolIris.OProp.MProp
 import PcolIris.OProp.ProbSpace
 
@@ -108,6 +109,11 @@ def oplus (ξ : PMF Val) (φ : Val → OProp) : OProp :=
     ∀ v ∈ ξ.support, φ v (𝓠 v)
 
 notation "⨁[ " ξ " ] " φ => oplus ξ φ
+
+def distributed_as (e : Expr) (ξ : PMF Val) : OProp :=
+  ⨁[ξ] fun v ↦ ⌈ e == Expr.literal v ⌉
+
+infixl:70 " ~ " => distributed_as
 
 def nondet (S : Set Val) (φ : Val → OProp) : OProp :=
   fun 𝓟 ↦ ∃ ξ : PMF Val, ξ.support ⊆ S ∧ oplus ξ φ 𝓟

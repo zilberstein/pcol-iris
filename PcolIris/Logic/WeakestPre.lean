@@ -127,4 +127,25 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
   rw [Cmd.withInv, Cmd.to_pom] at hν
   exact lemma_C6 hμ hthread₁ hthread₂ ν hν
 
+lemma wp_split {𝓘 : Inv} {c : Cmd Act} {ξ : PMF Val} {ψ : Val → OProp} :
+    (⨁[ ξ ] fun v ↦ wp 𝓘 c (ψ v)) ⊢ wp 𝓘 c (⨁[ ξ ] ψ) := by
+  intro 𝓟 ⟨𝓟', V, hdsj, hdom, hsum, hwp⟩ μ 𝓟fr hre ν hν
+  obtain ⟨k, rfl, hk⟩ :
+      ∃ k,
+        μ = ξ.bind k ∧
+        ∀ v ∈ ξ.support, (𝓟' v ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ k v :=
+    sorry
+  obtain ⟨ξ', _, f, hf, rfl⟩ := ConvexPowerset.mem_bind.mp hν
+  have : ξ' = ξ.bind k := sorry; subst this
+  have h v hv := hwp v hv (k v) 𝓟fr (hk v hv) ((k v).bind f) sorry
+  choose 𝓠 h𝓠 using h
+  classical
+  let 𝓠' v := if h : v ∈ ξ.support then 𝓠 v h else ProbSpace.trivial Iris.BI.BIBase.emp
+  -- Also need to permute indices to make the `𝓠'`s disjoint
+  refine ⟨ProbSpace.sum ξ 𝓠' V sorry sorry, ?_, ?_⟩
+  · sorry
+  · refine ⟨𝓠', V, sorry, sorry, le_refl _, ?_⟩
+    intro v hv; unfold 𝓠'; rw [dif_pos hv]
+    exact h𝓠 v hv |>.2
+
 end Pcol

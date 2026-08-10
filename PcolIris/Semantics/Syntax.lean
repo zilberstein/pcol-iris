@@ -31,7 +31,7 @@ notation:35 "if( " e " ){ " c " }" => Cmd.if_stmt e c Cmd.skip
 notation:30 "while( " e " ){ " c "}" => Cmd.while_loop e c
 notation:50 c₁ " ⊕[ " e " ] " c₂ => Cmd.prob e c₁ c₂
 infixl:50 " & " => Cmd.nd
-prefix:70 "$" => Expr.var
+prefix:80 "$" => Expr.var
 
 /-- Type class instances to give nice syntax to arithmetic and numbers -/
 instance {n : Nat} : OfNat Expr n where ofNat := Expr.literal n

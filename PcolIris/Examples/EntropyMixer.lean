@@ -35,7 +35,7 @@ def 𝓘 : Inv := {
 }
 
 def φ : OProp := iprop(⌈own ($"y")⌉ ∗ ⌈own ($"x₁")⌉ ∗ ⌈own ($"x₂")⌉ ∗ ⌈own ($"z") ⌉)
-def ψ : OProp := ⨁[ PMF.Bern 0.5 ] fun z ↦ ⌈ ($"z") == Expr.literal z ⌉
+def ψ : OProp := ($"z") ~  PMF.Bern 0.5
 
 lemma entropy_mixer_spec :
   Inv.emp ⊢{{ φ }} entropy_mixer {{ ψ }} := by

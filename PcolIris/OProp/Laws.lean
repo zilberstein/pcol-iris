@@ -21,5 +21,11 @@ lemma oplus_distrib' (ξ : PMF Val) (φ : Val → OProp) (ψ : OProp) (h : ψ.Pr
     (⨁[ ξ ] fun v ↦ iprop(φ v ∗ ψ)) ⊢ (⨁[ ξ ] φ) ∗ ψ := by
   sorry
 
+lemma oplus_weaken {ξ : PMF Val} {φ ψ : Val → OProp} (h : ∀ v ∈ ξ.support, φ v ⊢ ψ v) :
+    (⨁[ξ] φ) ⊢ ⨁[ξ] ψ := by
+  intro 𝓟 ⟨𝓠, V, hdsj, hdom, hsum, hφ⟩
+  refine ⟨𝓠, V, hdsj, hdom, hsum, ?_⟩
+  intro v hv; exact h v hv (𝓠 v) <| hφ v hv
+
 end OProp
 end Pcol
