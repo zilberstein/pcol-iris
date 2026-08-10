@@ -95,6 +95,10 @@ instance : Iris.BI OProp where
   later_persistently := sorry
   later_false_em := sorry
 
+instance : Iris.BI.BIAffine OProp where
+  affine := by
+    intro φ; constructor; intro _ _ _ _; trivial
+
 def Precise (φ : OProp) : Prop :=
   ∃ 𝓟 : ProbSpace, ∀ 𝓠, 𝓟 ≤ 𝓠 ↔ φ 𝓠
 

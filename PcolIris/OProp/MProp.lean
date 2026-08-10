@@ -134,11 +134,24 @@ instance : Iris.BI MProp where
   later_persistently := sorry
   later_false_em := sorry
 
+instance : Iris.BI.BIAffine MProp where
+  affine := by intro P; constructor; intro _ _; trivial
+
 def own (e : Expr) : MProp := {
   prop σ := (e σ).isSome
   upcl := sorry
 }
 
 end MProp
+
+namespace Expr
+
+def equals (e₁ e₂ : Expr) : MProp := {
+  prop σ := (e₁ σ).isSome ∧ e₁ σ = e₂ σ
+  upcl := sorry
+}
+infixr:66 " == " => equals
+
+end Expr
 
 end Pcol
