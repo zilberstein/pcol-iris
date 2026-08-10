@@ -23,18 +23,14 @@ def wp_base (𝓘 : Inv) (F : ProbSpace → Prop) (c : Cmd Act) (ψ : OProp) : O
 /-- The standard "strong" wp allows any frame -/
 def wp (𝓘 : Inv) : Cmd Act → OProp → OProp := wp_base 𝓘 (fun _ ↦ True)
 
-/-- The "weak" triple only preserves frames for trivial probability spaces,
+/-- The "weak" wp only preserves frames for trivial probability spaces,
 where every event has probability exactly 0 or 1 -/
 def wp_weak (𝓘 : Inv) : Cmd Act → OProp → OProp := wp_base 𝓘 fun 𝓟fr ↦
   ∀ E, 𝓟fr.mspace.MeasurableSet' E → 𝓟fr.μ E = 0 ∨ 𝓟fr.μ E = 1
 
 notation 𝓘 " ⊢{{" φ "}} " c " {{" ψ "}}" => φ ⊢ wp 𝓘 c ψ
 
-lemma wp_conseq {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {φ ψ : OProp}
-    (h : φ ⊢ ψ) : wp_base 𝓘 F c φ ⊢ wp_base 𝓘 F c ψ := by
-  intro 𝓟 hc μ 𝓟fr F hre ν hν
-  have ⟨𝓠, hre', hφ⟩ := hc μ 𝓟fr F hre ν hν
-  refine ⟨𝓠, hre', ?_⟩; exact h 𝓠 hφ
+/- BASIC COMMAND RULES -/
 
 lemma wp_skip {𝓘 : Inv} {F : ProbSpace → Prop} (c : Cmd Act) (φ : OProp) :
     φ ⊣⊢ wp_base 𝓘 F Cmd.skip φ := by
@@ -60,6 +56,16 @@ lemma wp_if_true {𝓘 : Inv} {F : ProbSpace → Prop} {b : Expr} {c₁ c₂ : C
   intro 𝓟 ⟨htrue, hwp⟩ μ 𝓟fr hF href ν hν; rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_if_stmt] at hν
   sorry
 
+lemma wp_assign {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
+  (OProp.sure ($ x == Expr.literal v) ∗ (OProp.sure ($ x == (fun σ ↦ e (σ.extend x v))) -∗ ψ)) ⊢
+  wp_base 𝓘 F (x ::= e) ψ := sorry
+
+lemma wp_assign' {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) {ψ : OProp} :
+  (OProp.sure (MProp.own ($ x))) ∗ (OProp.sure ($ x == e) -∗ ψ) ⊢
+  wp_base 𝓘 F (x ::= e) ψ := sorry
+
+/-- CONCURRNCY RULES -/
+
 -- This mostly follows from invariant monotonicity, but we need a few more properties about
 -- assertions, etc
 lemma wp_share {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ψ : OProp} :
@@ -84,14 +90,6 @@ lemma wp_atom {𝓘 : Inv} {F : ProbSpace → Prop} {a : Act} {ψ : OProp} :
     (OProp.sure 𝓘.to_MProp -∗ wp_base Inv.emp F (Cmd.act a) (iprop(ψ ∗ OProp.sure 𝓘.to_MProp)))
     ⊢ wp_base 𝓘 F (Cmd.act a) ψ := by
   sorry
-
-lemma wp_assign {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
-  (OProp.sure ($ x == Expr.literal v) ∗ (OProp.sure ($ x == (fun σ ↦ e (σ.extend x v))) -∗ ψ)) ⊢
-  wp_base 𝓘 F (x ::= e) ψ := sorry
-
-lemma wp_assign' {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) {ψ : OProp} :
-  (OProp.sure (MProp.own ($ x))) ∗ (OProp.sure ($ x == e) -∗ ψ) ⊢
-  wp_base 𝓘 F (x ::= e) ψ := sorry
 
 /-- **The parallel composition rule.**  If the postconditions `ψ₁` and `ψ₂` are precise, then
 the weakest preconditions of two threads can be combined with the separating conjunction.
@@ -137,7 +135,15 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
   rw [Cmd.withInv, Cmd.to_pom] at hν
   exact lemma_C6 hμ hthread₁ hthread₂ ν hν
 
-lemma wp_split {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ξ : PMF Val} {ψ : Val → OProp} :
+/- STRUCTURAL RULES -/
+variable {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ξ : PMF Val} {φ ψ : OProp}
+
+lemma wp_conseq (h : φ ⊢ ψ) : wp_base 𝓘 F c φ ⊢ wp_base 𝓘 F c ψ := by
+  intro 𝓟 hc μ 𝓟fr F hre ν hν
+  have ⟨𝓠, hre', hφ⟩ := hc μ 𝓟fr F hre ν hν
+  refine ⟨𝓠, hre', ?_⟩; exact h 𝓠 hφ
+
+lemma wp_split {ψ : Val → OProp} :
     (⨁[ ξ ] fun v ↦ wp_base 𝓘 F c (ψ v)) ⊢ wp_base 𝓘 F c (⨁[ ξ ] ψ) := by
   intro 𝓟 ⟨𝓟', V, hdsj, hdom, hsum, hwp⟩ μ 𝓟fr hF hre ν hν
   obtain ⟨k, rfl, hk⟩ :
@@ -158,13 +164,23 @@ lemma wp_split {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ξ : PMF Val
     intro v hv; unfold 𝓠'; rw [dif_pos hv]
     exact h𝓠 v hv |>.2
 
-lemma wp_weaken {𝓘 : Inv} {c : Cmd Act} {ψ : OProp} :
+lemma wp_weaken :
     wp 𝓘 c ψ ⊢ wp_weak 𝓘 c ψ := by
   intro 𝓟 hwp μ 𝓕 _ hre ν hν
   exact hwp μ 𝓕 True.intro hre ν hν
 
-lemma wp_strengthen {𝓘 : Inv} {c : Cmd Act} {ψ : OProp} (h : ψ.Precise) :
+lemma wp_strengthen (h : ψ.Precise) :
     wp_weak 𝓘 c ψ ⊢ wp 𝓘 c ψ := by
   sorry
+
+lemma wp_frame {φ ψ : OProp} :
+    φ ∗ wp 𝓘 c ψ ⊢ wp 𝓘 c iprop(φ ∗ ψ) := by
+  intro 𝓟 ⟨𝓟₁, 𝓟₂, hdsj, hle, hφ, hwp⟩ μ 𝓕 _ hre ν hν
+  have ⟨𝓠, hre', hψ⟩ := hwp μ (𝓕 ⊗ 𝓟₁) True.intro ?_ ν hν
+  · refine ⟨𝓠 ⊗ 𝓟₁, ?_, 𝓟₁, 𝓠, ?_, ?_, hφ, hψ⟩
+    · sorry
+    · sorry
+    · sorry
+  · sorry
 
 end Pcol
