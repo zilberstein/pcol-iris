@@ -93,15 +93,6 @@ lemma pairEquiv_aemeasurable (p q : ProbSpace) :
     (p.mspace.prod q.mspace) ((p.mspace.prod q.mspace).map Nat.pairEquiv) _ _
   exact measurable_iff_le_map.mpr fun s a ↦ a
 
-/-- The measure of a product space is the product measure of the preimage under the
-pairing bijection. -/
-lemma product_μ_apply (p q : ProbSpace) {E : Set ℕ} (hE : (p ⊗ q).mspace.MeasurableSet' E) :
-    (p ⊗ q).μ E =
-      (@ProbabilityMeasure.prod ℕ p.mspace ℕ q.mspace p.μ q.μ) (⇑Nat.pairEquiv ⁻¹' E) :=
-  @ProbabilityMeasure.map_apply (ℕ × ℕ) ℕ (p.mspace.prod q.mspace) (p ⊗ q).mspace
-    (@ProbabilityMeasure.prod ℕ p.mspace ℕ q.mspace p.μ q.μ) (⇑Nat.pairEquiv)
-    (pairEquiv_aemeasurable p q) E hE
-
 /-- Values of a probability measure, viewed in `ℝ≥0∞`. -/
 lemma prob_coe {α : Type*} {m : MeasurableSpace α} (P : @ProbabilityMeasure α m) (s : Set α) :
     ((P s : NNReal) : ENNReal) = @ProbabilityMeasure.toMeasure α m P s :=
@@ -114,19 +105,72 @@ lemma prod_coe_apply (p q : ProbSpace) (s : Set (ℕ × ℕ)) :
         (@ProbabilityMeasure.toMeasure ℕ q.mspace q.μ)) s :=
   @prob_coe (ℕ × ℕ) (p.mspace.prod q.mspace) _ s
 
+/-- The measure of a product space is the product measure of the preimage under the
+pairing bijection.  Since the measure of a product space is the completion of the pushforward
+of the product measure, this holds for every set, measurable or not. -/
+lemma product_μ_apply (p q : ProbSpace) (E : Set ℕ) :
+    (p ⊗ q).μ E =
+      (@ProbabilityMeasure.prod ℕ p.mspace ℕ q.mspace p.μ q.μ) (⇑Nat.pairEquiv ⁻¹' E) := by
+  refine ENNReal.coe_injective ?_
+  rw [prob_coe, prod_coe_apply, ← prodMeasure_apply p q E]
+  rfl
+
+/-- Two products whose left factors agree on the coarser σ-algebra have the same underlying
+(uncompleted) product measure there. -/
+lemma prodMeasure_agree_left {p p' q : ProbSpace} (h : p ≤ p') (E : Set ℕ)
+    (hE : (prodMSpace p q).MeasurableSet' E) : prodMeasure p q E = prodMeasure p' q E := by
+  rw [prodMeasure_apply, prodMeasure_apply]
+  refine prod_measure_eq_left h.mspace _ _ _ (fun F hF ↦ ?_) _ hE
+  rw [← @prob_coe ℕ p.mspace p.μ F, ← @prob_coe ℕ p'.mspace p'.μ F, h.μ F hF]
+
+/-- Two products whose right factors agree on the coarser σ-algebra have the same underlying
+(uncompleted) product measure there. -/
+lemma prodMeasure_agree_right {p q q' : ProbSpace} (h : q ≤ q') (E : Set ℕ)
+    (hE : (prodMSpace p q).MeasurableSet' E) : prodMeasure p q E = prodMeasure p q' E := by
+  rw [prodMeasure_apply, prodMeasure_apply]
+  refine prod_measure_eq_right h.mspace _ _ _ (fun F hF ↦ ?_) _ hE
+  rw [← @prob_coe ℕ q.mspace q.μ F, ← @prob_coe ℕ q'.mspace q'.μ F, h.μ F hF]
+
 /-! ### Monotonicity of the product of probability spaces -/
+
+/-! ### The state of a product is not monotone
+
+The two `sorry`s below are unavoidable: the remaining goal, monotonicity of the `state`
+component, is false in general, because `Mem.union` is left-biased and hence not monotone in
+its left argument.  Enlarging the left factor of a product may make it disagree with the
+right factor at a variable that was previously undefined on the left, and there the product
+changes its value instead of only becoming more defined.  This is witnessed formally by
+`product_not_mono_left` below. -/
+
+/-- The probability space concentrated at `0` whose memory is `σ` at every point. -/
+noncomputable def constSpace (σ : Mem) : ProbSpace where
+  mspace := ⊤
+  μ := ⟨@Measure.dirac ℕ ⊤ 0, @Measure.dirac.isProbabilityMeasure ℕ ⊤ 0⟩
+  dom := σ.dom
+  state _ := σ
+  dom_valid _ := rfl
+  complete := ⟨fun _ _ ↦ by trivial⟩
+
+/-- The product of probability spaces is *not* monotone in its left argument. -/
+lemma product_not_mono_left :
+    ∃ p p' q : ProbSpace, p ≤ p' ∧ ¬ ((p ⊗ q) ≤ (p' ⊗ q)) := by
+  refine ⟨constSpace Mem.emp, constSpace (fun _ ↦ some 2), constSpace (fun _ ↦ some 1),
+    ⟨le_refl _, fun _ _ ↦ rfl, ?_, fun _ _ ↦ _root_.trivial⟩, ?_⟩
+  · intro x hx
+    exact absurd rfl hx
+  · intro hle
+    have hst := hle.state 0
+    have hx := hst "x"
+    simp [product, constSpace, Mem.union, Mem.emp] at hx
 
 /-- The product of probability spaces is monotone in its left argument. -/
 lemma product_mono_left {p p' q : ProbSpace} (h : p ≤ p') : (p ⊗ q) ≤ (p' ⊗ q) := by
-  refine ⟨MeasurableSpace.map_mono (prod_le_prod_left h.mspace), ?_, ?_, ?_⟩
+  refine ⟨completeMSpace_mono (MeasurableSpace.map_mono (prod_le_prod_left h.mspace))
+    (prodMeasure_agree_left h), ?_, ?_, ?_⟩
   · intro E hE
-    have hE' : (p' ⊗ q).mspace.MeasurableSet' E :=
-      MeasurableSpace.map_mono (prod_le_prod_left h.mspace) E hE
-    rw [product_μ_apply p q hE, product_μ_apply p' q hE']
     refine ENNReal.coe_injective ?_
-    rw [prod_coe_apply, prod_coe_apply]
-    refine prod_measure_eq_left h.mspace _ _ _ (fun F hF ↦ ?_) _ hE
-    rw [← @prob_coe ℕ p.mspace p.μ F, ← @prob_coe ℕ p'.mspace p'.μ F, h.μ F hF]
+    rw [prob_coe, prob_coe]
+    exact completeMeasure_agree (prodMeasure_agree_left h) hE
   · exact Set.union_subset_union h.dom (Set.Subset.refl _)
   · intro i x
     simp only [product, Nat.pairEquiv_apply, Nat.pairEquiv_symm_apply, Mem.union]
@@ -134,15 +178,12 @@ lemma product_mono_left {p p' q : ProbSpace} (h : p ≤ p') : (p ⊗ q) ≤ (p' 
 
 /-- The product of probability spaces is monotone in its right argument. -/
 lemma product_mono_right {p q q' : ProbSpace} (h : q ≤ q') : (p ⊗ q) ≤ (p ⊗ q') := by
-  refine ⟨MeasurableSpace.map_mono (prod_le_prod_right h.mspace), ?_, ?_, ?_⟩
+  refine ⟨completeMSpace_mono (MeasurableSpace.map_mono (prod_le_prod_right h.mspace))
+    (prodMeasure_agree_right h), ?_, ?_, ?_⟩
   · intro E hE
-    have hE' : (p ⊗ q').mspace.MeasurableSet' E :=
-      MeasurableSpace.map_mono (prod_le_prod_right h.mspace) E hE
-    rw [product_μ_apply p q hE, product_μ_apply p q' hE']
     refine ENNReal.coe_injective ?_
-    rw [prod_coe_apply, prod_coe_apply]
-    refine prod_measure_eq_right h.mspace _ _ _ (fun F hF ↦ ?_) _ hE
-    rw [← @prob_coe ℕ q.mspace q.μ F, ← @prob_coe ℕ q'.mspace q'.μ F, h.μ F hF]
+    rw [prob_coe, prob_coe]
+    exact completeMeasure_agree (prodMeasure_agree_right h) hE
   · exact Set.union_subset_union (Set.Subset.refl _) h.dom
   · intro i x; sorry
 
