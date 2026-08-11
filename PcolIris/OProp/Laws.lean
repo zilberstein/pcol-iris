@@ -28,4 +28,16 @@ lemma oplus_weaken {ξ : PMF Val} {φ ψ : Val → OProp} (h : ∀ v ∈ ξ.supp
   intro v hv; exact h v hv (𝓠 v) <| hφ v hv
 
 end OProp
+
+namespace Precise
+
+lemma sure (P : MProp) : (OProp.sure P).Precise := sorry
+
+lemma sep {φ ψ : OProp} (hφ : φ.Precise) (hψ : ψ.Precise) : iprop(φ ∗ ψ).Precise := by sorry
+
+lemma oplus {ξ : PMF Val} {φ : Val → OProp} (h : ∀ v ∈ ξ.support, (φ v).Precise) :
+    (⨁[ξ] φ).Precise := by sorry
+
+end Precise
+
 end Pcol

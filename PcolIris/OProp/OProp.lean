@@ -48,10 +48,13 @@ instance : Iris.BI.BIBase OProp where
   later φ := φ
 
 instance : Iris.BI OProp where
-  toCOFE := sorry
-  entails_refl := sorry
-  entails_trans := sorry
-  equiv_iff := sorry
+  toCOFE := Iris.COFE.ofDiscrete OProp
+  entails_refl := fun _ h ↦ h
+  entails_trans := by intro _ _ _ he₁ he₂ 𝓟 h; exact he₂ 𝓟 <| he₁ 𝓟 h
+  equiv_iff := by
+    intro φ ψ; constructor
+    · rintro rfl; constructor <;> intro _ h <;> exact h
+    · intro ⟨h₁, h₂⟩; funext 𝓟; ext; exact ⟨h₁ 𝓟, h₂ 𝓟⟩
   and_ne := sorry
   or_ne := sorry
   imp_ne := sorry
@@ -61,13 +64,13 @@ instance : Iris.BI OProp where
   wand_ne := sorry
   persistently_ne := sorry
   later_ne := sorry
-  pure_intro := sorry
-  pure_elim' := sorry
-  and_elim_l := sorry
-  and_elim_r := sorry
-  and_intro := sorry
-  or_intro_l := sorry
-  or_intro_r := sorry
+  pure_intro := by intro p _ hp _ _; exact hp
+  pure_elim' := by intro p φ hφ 𝓟 hp; exact hφ hp 𝓟 True.intro
+  and_elim_l := by intro φ ψ 𝓟 ⟨hφ, _⟩; exact hφ
+  and_elim_r := by intro φ ψ 𝓟 ⟨_, hψ⟩; exact hψ
+  and_intro := by intro φ ψ ϑ he₁ he₂ 𝓟 hφ; exact ⟨he₁ 𝓟 hφ, he₂ 𝓟 hφ⟩
+  or_intro_l := by intro φ ψ 𝓟 hφ; left; exact hφ
+  or_intro_r := by intro φ ψ 𝓟 hψ; right; exact hψ
   or_elim := sorry
   imp_intro := sorry
   imp_elim := sorry
