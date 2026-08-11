@@ -23,8 +23,6 @@ noncomputable def entropy_mixer : Cmd Act :=
     "y" ::= 1
   )
 
-def PMF.Bern (q : Rat) : PMF Val := sorry
-
 def 𝓘 : Inv := {
   prop := fun σ ↦ σ.dom = {"y"} ∧ (σ "y" = some 0 ∨ σ "y" = some 1)
   dom := {"y"}
@@ -38,7 +36,7 @@ def 𝓘 : Inv := {
 }
 
 def φ : OProp := iprop(⌈own ($"y")⌉ ∗ ⌈own ($"x₁")⌉ ∗ ⌈own ($"x₂")⌉ ∗ ⌈own ($"z") ⌉)
-def ψ : OProp := ($"z") ~ PMF.Bern 0.5
+def ψ : OProp := ($"z") ~ Bern 0.5
 
 /-- If `y` holds a value that is either `0` or `1`, then the memory satisfies the
 invariant `𝓘` (which only constrains the variable `y`). -/
@@ -57,6 +55,10 @@ lemma inv_of_y_eq (v : Val) (hv : v = 0 ∨ v = 1) :
     · exact Or.inl rfl
     · exact Or.inr rfl
 
+lemma exists_y_of_inv :
+    𝓘.to_MProp ⊢ iprop(∃ (x : ↑({0, 1} : Set ℚ)), ($"y") == Expr.literal x.val) := by
+  sorry
+
 /-- The invariant `𝓘` guarantees that the variable `y` is allocated. -/
 lemma own_y_of_inv : 𝓘.to_MProp ⊢ MProp.own ($"y") := by
   intro σ hσ
@@ -69,36 +71,29 @@ lemma own_y_of_inv : 𝓘.to_MProp ⊢ MProp.own ($"y") := by
 lemma entropy_mixer_spec :
   Inv.emp ⊢{{ φ }} entropy_mixer {{ ψ }} := by
   unfold φ entropy_mixer
-  iintro ⟨hy, hx₁, hx₂, hz⟩; iapply wp_seq
-  iapply wp_assign' "y"; iframe; iintro hy
-  iapply wp_weaken (φ := iprop(ψ ∗ ⌈ 𝓘.to_MProp ⌉)) (ψ := ψ)
-  · iintro ⟨h, _⟩; iapply h
-  · iapply wp_share (𝓘 := 𝓘); isplitl [hy]
-    · irevert hy; iapply sure_weaken; sorry
-    · iapply wp_weaken (φ := iprop(ψ ∗ Iris.BI.BIBase.emp))
-      · iintro ⟨h, _⟩; iframe
-      · iapply wp_par sorry sorry; isplitl
-        · iapply wp_seq; iapply wp_atom
-          iintro hinv;
-          iapply wp_assign' "x₁"; iframe hx₁
-          iintro heq
-          isplitr [hinv]
-          · iapply wp_seq
-            -- Remaining gap: the sampling command `x₂ :≈ Bern 0.5`.  The logic does not
-            -- provide a weakest-precondition rule for `Cmd.act (Act.samp _ _)` yet (only
-            -- `wp_assign`/`wp_assign'` for deterministic assignments), and proving one
-            -- from the definition of `wp` requires the still undefined `ProbSpace.sum`,
-            -- which is what interprets the outcome conjunction `⨁` of `ψ`.  Reasoning
-            -- about the subsequent assignment `z ::= x₁ xor x₂` additionally needs to
-            -- case on the (nondeterministic) value read into `x₁`.
+  iintro ⟨hy, hx₁, hx₂, hz⟩; unfold wp; iapply wp_seq
+  iapply wp_assign "y" 0 _ 0; isplitl [hy]
+  · irevert hy; iapply sure_weaken; iintro hy
+    isplit
+    · istop; intro _ _; sorry
+    · iapply hy
+  · iintro hy
+    iapply wp_conseq (φ := iprop(ψ ∗ ⌈ 𝓘.to_MProp ⌉)) (ψ := ψ)
+    · iintro ⟨h, _⟩; iapply h
+    · iapply wp_share (𝓘 := 𝓘); isplitl [hy]
+      · irevert hy; iapply sure_weaken; sorry
+      · iapply wp_conseq (φ := iprop(ψ ∗ Iris.BI.BIBase.emp))
+        · iintro ⟨h, _⟩; iframe
+        · rw [← wp]; iapply wp_par sorry sorry; isplitl
+          · unfold wp; rw [← wp]; iapply wp_strengthen
+            · sorry
+            · unfold wp_weak; iapply wp_seq; iapply wp_atom
+              iintro hinv; rw [← wp_weak]
+              ihave hinv := sure_weaken exists_y_of_inv $$ hinv
+              irevert hinv
+              iapply wp_exists; sorry
+              sorry
+          · unfold wp; iapply wp_atom; iintro hinv; iapply wp_assign; sorry
             sorry
-          · iexact hinv
-        · iapply wp_atom; iintro hinv; iapply wp_assign'
-          isplitl
-          · irevert hinv; iapply sure_weaken; exact own_y_of_inv
-          · iintro hy1; isplitr
-            · itrivial
-            · irevert hy1; iapply sure_weaken
-              exact inv_of_y_eq _ (Or.inr (by norm_num))
 
 end Pcol

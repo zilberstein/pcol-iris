@@ -25,7 +25,7 @@ def dom (P : MProp) : Set Var :=
   | ∃ σ : Mem,
       x ∈ σ.dom ∧
       P σ ∧
-      ∀ τ, P τ → σ ≤ τ
+      ∀ τ, P τ → ¬ τ ≤ σ
   }
 
 instance : Iris.BI.BIBase MProp where

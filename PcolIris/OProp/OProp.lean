@@ -15,7 +15,7 @@ namespace OProp
 def sure (P : MProp) : OProp :=
   fun 𝓟 ↦ 𝓟.support ⊆ 𝓟.state ⁻¹' P.prop
 
-notation "⌈" P "⌉" => sure P
+notation "⌈" P "⌉" => sure iprop(P)
 
 def hasProb (A : Event) (q : ENNReal) : OProp :=
   fun (𝓟 : ProbSpace) ↦
@@ -106,7 +106,7 @@ instance : Iris.BI.BIAffine OProp where
 def Precise (φ : OProp) : Prop :=
   ∃ 𝓟 : ProbSpace, ∀ 𝓠, 𝓟 ≤ 𝓠 ↔ φ 𝓠
 
-def oplus (ξ : PMF Val) (φ : Val → OProp) : OProp :=
+def oplus {ι : Type} (ξ : PMF ι) (φ : ι → OProp) : OProp :=
   fun 𝓟 ↦ ∃ 𝓠 V h hd,
     ProbSpace.sum ξ 𝓠 V h hd ≤ 𝓟 ∧
     ∀ v ∈ ξ.support, φ v (𝓠 v)
@@ -118,10 +118,10 @@ def distributed_as (e : Expr) (ξ : PMF Val) : OProp :=
 
 infixl:70 " ~ " => distributed_as
 
-def nondet (S : Set Val) (φ : Val → OProp) : OProp :=
-  fun 𝓟 ↦ ∃ ξ : PMF Val, ξ.support ⊆ S ∧ oplus ξ φ 𝓟
+def nondet {ι : Type} (φ : ι → OProp) : OProp :=
+  fun 𝓟 ↦ ∃ ξ : PMF ι, oplus ξ φ 𝓟
 
-notation "&[ " ξ " ] " φ => nondet ξ φ
+prefix:60 "& " => nondet
 
 end OProp
 

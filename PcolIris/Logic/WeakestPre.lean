@@ -7,6 +7,8 @@ import PcolIris.OProp.OProp
 
 namespace Pcol
 
+open MProp
+
 def wp_base (𝓘 : Inv) (F : ProbSpace → Prop) (c : Cmd Act) (ψ : OProp) : OProp :=
   fun 𝓟 ↦
     ∀ (μ : Distr Mem) (𝓟fr : ProbSpace),
@@ -57,12 +59,8 @@ lemma wp_if_true {𝓘 : Inv} {F : ProbSpace → Prop} {b : Expr} {c₁ c₂ : C
   sorry
 
 lemma wp_assign {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
-  (OProp.sure ($ x == Expr.literal v) ∗ (OProp.sure ($ x == (fun σ ↦ e (σ.extend x v))) -∗ ψ)) ⊢
-  wp_base 𝓘 F (x ::= e) ψ := sorry
-
-lemma wp_assign' {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) {ψ : OProp} :
-  (OProp.sure (MProp.own ($ x))) ∗ (OProp.sure ($ x == e) -∗ ψ) ⊢
-  wp_base 𝓘 F (x ::= e) ψ := sorry
+  ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗ ((⌈$ x == Expr.literal v ∧ own e⌉) -∗ ψ) ⊢
+   wp_base 𝓘 F (x ::= e) ψ := sorry
 
 /-- CONCURRNCY RULES -/
 
@@ -136,14 +134,15 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
   exact lemma_C6 hμ hthread₁ hthread₂ ν hν
 
 /- STRUCTURAL RULES -/
-variable {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ξ : PMF Val} {φ ψ : OProp}
+
+variable {ι : Type} {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ξ : PMF ι} {φ ψ : OProp}
 
 lemma wp_conseq (h : φ ⊢ ψ) : wp_base 𝓘 F c φ ⊢ wp_base 𝓘 F c ψ := by
   intro 𝓟 hc μ 𝓟fr F hre ν hν
   have ⟨𝓠, hre', hφ⟩ := hc μ 𝓟fr F hre ν hν
   refine ⟨𝓠, hre', ?_⟩; exact h 𝓠 hφ
 
-lemma wp_split {ψ : Val → OProp} :
+lemma wp_split {ψ : ι → OProp} :
     (⨁[ ξ ] fun v ↦ wp_base 𝓘 F c (ψ v)) ⊢ wp_base 𝓘 F c (⨁[ ξ ] ψ) := by
   intro 𝓟 ⟨𝓟', V, hdsj, hdom, hsum, hwp⟩ μ 𝓟fr hF hre ν hν
   obtain ⟨k, rfl, hk⟩ :
@@ -164,6 +163,9 @@ lemma wp_split {ψ : Val → OProp} :
     intro v hv; unfold 𝓠'; rw [dif_pos hv]
     exact h𝓠 v hv |>.2
 
+lemma wp_nsplit {ψ : ι → OProp} :
+    (& fun v ↦ wp_base 𝓘 F c (ψ v)) ⊢ wp_base 𝓘 F c (& ψ) := by sorry
+
 lemma wp_weaken :
     wp 𝓘 c ψ ⊢ wp_weak 𝓘 c ψ := by
   intro 𝓟 hwp μ 𝓕 _ hre ν hν
@@ -173,7 +175,7 @@ lemma wp_strengthen (h : ψ.Precise) :
     wp_weak 𝓘 c ψ ⊢ wp 𝓘 c ψ := by
   sorry
 
-lemma wp_frame {φ ψ : OProp} :
+lemma wp_frame :
     φ ∗ wp 𝓘 c ψ ⊢ wp 𝓘 c iprop(φ ∗ ψ) := by
   intro 𝓟 ⟨𝓟₁, 𝓟₂, hdsj, hle, hφ, hwp⟩ μ 𝓕 _ hre ν hν
   have ⟨𝓠, hre', hψ⟩ := hwp μ (𝓕 ⊗ 𝓟₁) True.intro ?_ ν hν
@@ -182,5 +184,10 @@ lemma wp_frame {φ ψ : OProp} :
     · sorry
     · sorry
   · sorry
+
+lemma wp_exists {ι : Type} {P : ι → MProp} :
+    ((& fun i ↦ ⌈P i⌉) -∗ wp_base 𝓘 F c ψ)
+    ⊢ ⌈ iprop( ∃ i, P i ) ⌉ -∗ wp_weak 𝓘 c ψ := by
+  sorry
 
 end Pcol
