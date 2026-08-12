@@ -162,6 +162,14 @@ def equals (e₁ e₂ : Expr) : MProp := {
 }
 infixr:66 " == " => equals
 
+def le (e₁ e₂ : Expr) : MProp := {
+  prop σ := match e₁ σ, e₂ σ with
+  | some v₁, some v₂ => v₁ ≤ v₂
+  | _, _ => False
+  upcl := sorry
+}
+infixr:66 " <= " => le
+
 end Expr
 
 end Pcol

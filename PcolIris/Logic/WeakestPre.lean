@@ -35,7 +35,9 @@ notation 𝓘 " ⊢{{" φ "}} " c " {{" ψ "}}" => φ ⊢ wp 𝓘 c ψ
 
 /- BASIC COMMAND RULES -/
 
-lemma wp_skip {𝓘 : Inv} {F : ProbSpace → Prop} (c : Cmd Act) (φ : OProp) :
+variable {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act}
+
+lemma wp_skip (φ : OProp) :
     φ ⊣⊢ wp_base 𝓘 F Cmd.skip φ := by
   constructor
   · intro 𝓟 hφ μ 𝓟fr _ hre ν hν
@@ -46,7 +48,7 @@ lemma wp_skip {𝓘 : Inv} {F : ProbSpace → Prop} (c : Cmd Act) (φ : OProp) :
     rwa [heq]
   · intro 𝓟 hφ; sorry
 
-lemma wp_seq {𝓘 : Inv} {F : ProbSpace → Prop} {c₁ c₂ : Cmd Act} {ψ : OProp} :
+lemma wp_seq {c₁ c₂ : Cmd Act} {ψ : OProp} :
     wp_base 𝓘 F c₁ (wp_base 𝓘 F c₂ ψ) ⊢ wp_base 𝓘 F (Cmd.seq c₁ c₂) ψ := by
   intro 𝓟 h μ 𝓟fr hF href ν; rw [Cmd.withInv, Cmd.to_pom, Pom.lin_seq, ← bind_assoc]
   intro hν; rcases ConvexPowerset.mem_bind.mp hν with ⟨ξ, hξ, f, hf, rfl⟩
@@ -54,18 +56,33 @@ lemma wp_seq {𝓘 : Inv} {F : ProbSpace → Prop} {c₁ c₂ : Cmd Act} {ψ : O
   refine h' ξ 𝓟fr hF href' _ ?_
   exact ConvexPowerset.mem_bind.mpr ⟨ξ, ConvexPowerset.self_mem_singleton' _, f, hf, rfl⟩
 
-lemma wp_if_true {𝓘 : Inv} {F : ProbSpace → Prop} {b : Expr} {c₁ c₂ : Cmd Act} {φ ψ : OProp} :
+lemma wp_if_true {b : Expr} {c₁ c₂ : Cmd Act} {φ ψ : OProp} :
      ⌈b == Expr.literal 1⌉ ∧ wp_base 𝓘 F c₁ ψ ⊢ wp_base 𝓘 F (Cmd.if_stmt b c₁ c₂) ψ := by
   intro 𝓟 ⟨htrue, hwp⟩ μ 𝓟fr hF href ν hν; rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_if_stmt] at hν
   sorry
 
-lemma wp_assign {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
+lemma wp_assign (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
   ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗ ((⌈$ x == Expr.literal v ∧ own e⌉) -∗ ψ) ⊢
    wp_base 𝓘 F (x ::= e) ψ := sorry
 
-lemma wp_bern {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) (v : Val) {ψ : OProp} :
+lemma wp_bern (x : Var) (e : Expr) (v : Val) {ψ : OProp} :
     ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗ (($ x ~ Bern v ∧ ⌈own e⌉) -∗ ψ) ⊢
     wp_base 𝓘 F (x :≈ PExpr.Bern e) ψ := by sorry
+
+lemma wp_bounded_rank {ℓ h : ℕ} (hle : ℓ ≤ h) {φ : Set.Icc ℓ h → OProp} {b rank : Expr} {p : ℚ} (hp : p > 0)
+    (hrank : ∀ r, φ r ⊢ ⌈rank == Expr.literal r⌉)
+    (hexit : φ ⟨ℓ, le_refl _, hle⟩ ⊢ ⌈b == Expr.literal 0⌉)
+    (hloop : ∀ {r}, r.val > ℓ → φ r ⊢ ⌈b == Expr.literal 1⌉)
+    (hprec : (φ ⟨ℓ, le_refl _, hle⟩).Precise) :
+    (∀ r, ⌜r.val > 0⌝ -∗ φ r -∗
+      wp_base 𝓘 F c
+        (⨁[Bern p] fun x ↦
+          if x = 1 then
+            (& fun (s : Set.Ico ℓ r) ↦
+              φ ⟨s.val, s.property.1, (le_of_lt s.property.2).trans r.property.2⟩)
+          else
+            (& φ)))
+      ⊢ & φ -∗ wp 𝓘 (while( b ){ c }) (φ ⟨ℓ, le_refl _, hle⟩) := sorry
 
 /-- CONCURRNCY RULES -/
 
