@@ -221,12 +221,7 @@ lemma wp_x2_sample {F : ProbSpace → Prop} (v : Val) (hv : v = 0 ∨ v = 1) :
     iapply sure_weaken (Q := iprop(((0.5 : Expr) == Expr.literal 0.5) ∧ own ($"x₂")))
     intro σ hσ; exact ⟨⟨rfl, rfl⟩, hσ⟩
   · iintro ⟨hb, -⟩
-    iapply wp_after_sample v hv
-    isplitl [hb]
-    · iapply hb
-    · isplitl [h1]
-      · iapply h1
-      · iapply hz
+    iapply wp_after_sample v hv; iframe
 
 /-- The first thread, in the branch where the invariant guarantees the value `v` for `y`.
 The assignment `x₁ := y` copies that value into `x₁`, which both starts the second half of
@@ -244,12 +239,7 @@ lemma wp_x1_branch {F : ProbSpace → Prop} (v : Val) (hv : v = 0 ∨ v = 1) :
     · iapply hx₁
   · iintro ⟨h1, hy'⟩
     isplitl [h1 hx₂ hz]
-    · iapply wp_x2_sample v hv
-      isplitl [h1]
-      · iapply h1
-      · isplitl [hx₂]
-        · iapply hx₂
-        · iapply hz
+    · iapply wp_x2_sample v hv; iframe
     · irevert hy'
       iapply sure_weaken (inv_of_y_eq v hv)
 
@@ -268,7 +258,7 @@ lemma collapse_post {F : ProbSpace → Prop} {ι : Type} {c : Cmd Act} :
 /-- The first thread, given only the nondeterministic knowledge that `y` holds one of the
 two values allowed by the invariant. -/
 lemma wp_x1_nondet {F : ProbSpace → Prop} :
-    iprop(OProp.nondet (fun (i : Bit) => ⌈$"y" == Expr.literal i.val⌉) ∗
+    iprop(& (fun (i : Bit) => ⌈$"y" == Expr.literal i.val⌉) ∗
         ⌈own ($"x₁")⌉ ∗ ⌈own ($"x₂")⌉ ∗ ⌈own ($"z")⌉) ⊢
       wp_base Inv.emp F ("x₁" ::= $"y")
         iprop(wp_base 𝓘 F ("x₂" :≈ PExpr.Bern 0.5 ⨟ "z" ::= Expr.xor ($"x₁") ($"x₂")) ψ ∗
@@ -307,14 +297,7 @@ lemma entropy_mixer_spec :
               iapply wp_exists (F := fun 𝓟fr ↦ ∀ E, 𝓟fr.mspace.MeasurableSet' E →
                 𝓟fr.μ E = 0 ∨ 𝓟fr.μ E = 1)
               iintro hy
-              iapply wp_x1_nondet
-              isplitl [hy]
-              · iapply hy
-              · isplitl [hx₁]
-                · iapply hx₁
-                · isplitl [hx₂]
-                  · iapply hx₂
-                  · iapply hz
+              iapply wp_x1_nondet; iframe
           · unfold wp; iapply wp_atom; iintro hinv
             iapply wp_assign "y" 1 _ 1
             isplitl [hinv]
