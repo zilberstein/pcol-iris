@@ -63,8 +63,18 @@ instance : Iris.BI.BIBase MProp where
       exact himp ρ (hle.trans hle') hP
   }
 
-  sForall p := sorry
-  sExists p := sorry
+  sForall p := {
+    prop σ := ∀ P, p P → P σ
+    upcl := by
+      intro σ τ hle h P hP
+      exact P.upcl hle (h P hP)
+  }
+  sExists p := {
+    prop σ := ∃ P, p P ∧ P σ
+    upcl := by
+      rintro σ τ hle ⟨P, hP, hσ⟩
+      exact ⟨P, hP, P.upcl hle hσ⟩
+  }
 
   sep P Q := {
     prop σ :=

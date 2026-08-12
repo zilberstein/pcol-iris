@@ -192,6 +192,53 @@ lemma product_mono {p p' q q' : ProbSpace} (h₁ : p ≤ p') (h₂ : q ≤ q') :
     (p ⊗ q) ≤ (p' ⊗ q') :=
   le_trans (product_mono_left h₁) (product_mono_right h₂)
 
+/-! ### Reindexing the summands of a sum -/
+
+/--
+Reindexing the summands of a `ProbSpace.sum` along a bijection of the index type that
+preserves the weights does not change the sum.
+
+Only the inequality is stated (which is all that is needed downstream, and avoids the
+dependent equality of the `μ` fields); the two sums are in fact equal.
+-/
+lemma sum_reindex_le {ι : Type} (ξ : PMF ι) (e : ι ≃ ι) (hξ : ∀ i, ξ (e i) = ξ i)
+    (𝓠 : ι → ProbSpace) (V : Set Var)
+    (h : ∀ {i j : ι}, i ≠ j → Disjoint (𝓠 i).support (𝓠 j).support)
+    (hdom : ∀ i, (𝓠 i).dom = V)
+    (h' : ∀ {i j : ι}, i ≠ j → Disjoint (𝓠 (e.symm i)).support (𝓠 (e.symm j)).support)
+    (hdom' : ∀ i, (𝓠 (e.symm i)).dom = V) :
+    sum ξ (fun i ↦ 𝓠 (e.symm i)) V h' hdom' ≤ sum ξ 𝓠 V h hdom := by
+  classical
+  have hmeas : ∀ E : Set ℕ, (sumMSpace ξ fun i ↦ 𝓠 (e.symm i)).MeasurableSet' E →
+      (sumMSpace ξ 𝓠).MeasurableSet' E := by
+    intro E hE j hj
+    have := hE (e j) (by rw [hξ]; exact hj)
+    simpa only [Equiv.symm_apply_apply] using this
+  refine ⟨hmeas, ?_, Set.Subset.refl _, ?_⟩
+  · intro E hE
+    refine ENNReal.coe_injective ?_
+    rw [prob_coe, prob_coe]
+    change sumMeasure ξ (fun i ↦ 𝓠 (e.symm i)) E = sumMeasure ξ 𝓠 E
+    rw [sumMeasure_apply _ _ hE, sumMeasure_apply _ _ (hmeas E hE)]
+    refine Eq.trans (Eq.symm (e.tsum_eq (fun i ↦ ξ i *
+      (@ProbabilityMeasure.toMeasure ℕ (𝓠 (e.symm i)).mspace (𝓠 (e.symm i)).μ)
+        (E ∩ (𝓠 (e.symm i)).support)))) ?_
+    exact tsum_congr fun j ↦ by rw [hξ, Equiv.symm_apply_apply]
+  · intro n
+    change sumState (fun i ↦ 𝓠 (e.symm i)) V n ≤ sumState 𝓠 V n
+    unfold sumState
+    by_cases hex : ∃ i, n ∈ (𝓠 (e.symm i)).support
+    · have hex' : ∃ j, n ∈ (𝓠 j).support := ⟨e.symm hex.choose, hex.choose_spec⟩
+      rw [dif_pos hex, dif_pos hex']
+      change (𝓠 (e.symm hex.choose)).state n ≤ (𝓠 hex'.choose).state n
+      have heq : e.symm hex.choose = hex'.choose := by
+        by_contra hne
+        exact Set.disjoint_left.mp (h hne) hex.choose_spec hex'.choose_spec
+      rw [heq]
+    · have hex' : ¬ ∃ j, n ∈ (𝓠 j).support := by
+        rintro ⟨j, hj⟩; exact hex ⟨e j, by simpa only [Equiv.symm_apply_apply] using hj⟩
+      rw [dif_neg hex, dif_neg hex']
+
 end ProbSpace
 
 namespace Distr

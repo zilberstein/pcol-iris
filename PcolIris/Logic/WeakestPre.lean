@@ -1,6 +1,7 @@
 import PcolIris.Logic.Par
 import PcolIris.Logic.LemmaC6
 import PcolIris.OProp.ProbSpaceLemmas
+import PcolIris.OProp.Laws
 import PcolIris.Semantics.Invariant
 import PcolIris.Semantics.Semantics
 import PcolIris.OProp.OProp
@@ -61,6 +62,10 @@ lemma wp_if_true {𝓘 : Inv} {F : ProbSpace → Prop} {b : Expr} {c₁ c₂ : C
 lemma wp_assign {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
   ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗ ((⌈$ x == Expr.literal v ∧ own e⌉) -∗ ψ) ⊢
    wp_base 𝓘 F (x ::= e) ψ := sorry
+
+lemma wp_bern {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) (v : Val) {ψ : OProp} :
+    ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗ (($ x ~ Bern v ∧ ⌈own e⌉) -∗ ψ) ⊢
+    wp_base 𝓘 F (x :≈ PExpr.Bern e) ψ := by sorry
 
 /-- CONCURRNCY RULES -/
 
@@ -184,6 +189,31 @@ lemma wp_frame :
     · sorry
     · sorry
   · sorry
+
+/--
+**Assignment rule that preserves the value of the assigned expression.**
+
+If writing to `x` cannot change the value of `e` (hypothesis `he`), then the value of `e` is
+still known after the assignment.  This is a strengthening of `wp_assign`, which only
+returns the ownership of `e`; it is what makes it possible to re-establish an invariant that
+constrains a variable read by the assignment.
+
+After the assignment both `x` and `e` hold the value `v` deterministically, and they live in
+disjoint parts of the memory, so the two certainties are returned as separate resources.
+-/
+lemma wp_assign_pres {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) (ψ : OProp) (v : Val)
+    (he : ∀ (σ : Mem) (w : Val), e (σ.extend x w) = e σ) :
+    ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗
+      ((iprop(⌈$ x == Expr.literal v⌉ ∗ ⌈e == Expr.literal v⌉)) -∗ ψ) ⊢
+    wp_base 𝓘 F (x ::= e) ψ := sorry
+
+/-- **Elimination of a nondeterministic choice in the precondition.**
+
+If the postcondition is precise, then it is enough to establish the weakest precondition in
+each branch of a nondeterministic choice. -/
+lemma wp_nondet {κ : Type} {ψ : OProp} (h : ψ.Precise) :
+    OProp.nondet (fun (_ : κ) => wp_base 𝓘 F c ψ) ⊢ wp_base 𝓘 F c ψ :=
+  Iris.BI.Entails.trans wp_nsplit (wp_conseq (OProp.nondet_collapse h))
 
 lemma wp_exists {ι : Type} {P : ι → MProp} :
     ((& fun i ↦ ⌈P i⌉) -∗ wp_base 𝓘 F c ψ)
