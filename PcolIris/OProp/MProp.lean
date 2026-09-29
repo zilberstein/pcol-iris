@@ -18,16 +18,6 @@ instance : FunLike MProp Mem Prop where
   coe P := P.prop
   coe_injective := by intro P Q heq; ext1; exact heq
 
--- The Domain of an `MProp` `P` is the set of variables
--- that are contained in a minimal `Mem` that satisfies `P`
-def dom (P : MProp) : Set Var :=
-  { x : Var
-  | ∃ σ : Mem,
-      x ∈ σ.dom ∧
-      P σ ∧
-      ∀ τ, P τ → ¬ τ ≤ σ
-  }
-
 instance : Iris.BI.BIBase MProp where
   Entails P Q := ∀ σ, P σ → Q σ
 

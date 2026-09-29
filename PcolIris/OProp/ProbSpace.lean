@@ -93,33 +93,6 @@ lemma junkMem_dom (V : Set Var) : (junkMem V).dom = V := by
   simp only [junkMem, Mem.dom, ne_eq, Set.mem_setOf_eq]
   by_cases hx : x ∈ V <;> simp [hx]
 
-/-! ### The trivial (Dirac) probability space -/
-
-/-- A memory realizing the `MProp` `P` on its domain, if one exists. -/
-noncomputable def witness (P : MProp) : Mem :=
-  open Classical in
-  if h : ∃ σ : Mem, P σ ∧ σ.dom = P.dom then h.choose else junkMem P.dom
-
-lemma witness_spec {P : MProp} (h : ∃ σ : Mem, P σ ∧ σ.dom = P.dom) :
-    P (witness P) ∧ (witness P).dom = P.dom := by
-  classical
-  simpa only [witness, dif_pos h] using h.choose_spec
-
-lemma witness_dom (P : MProp) : (witness P).dom = P.dom := by
-  classical
-  by_cases h : ∃ σ : Mem, P σ ∧ σ.dom = P.dom
-  · exact (witness_spec h).2
-  · simp only [witness, dif_neg h]; exact junkMem_dom _
-
-/-- The trivial/dirac measure centered on the set `P` -/
-noncomputable def trivial (P : MProp) : ProbSpace where
-  mspace := ⊤
-  μ := ⟨@Measure.dirac ℕ ⊤ 0, @Measure.dirac.isProbabilityMeasure ℕ ⊤ 0⟩
-  dom := P.dom
-  state _ := witness P
-  dom_valid _ := witness_dom P
-  complete := ⟨fun _ _ ↦ by trivial⟩
-
 /-! ### Products -/
 
 /-- The measurable space underlying a product, before completion. -/
