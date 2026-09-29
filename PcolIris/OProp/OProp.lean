@@ -6,6 +6,50 @@ import PcolIris.OProp.ProbSpace
 
 namespace Pcol
 
+/-! ### Assertions about monotone expressions -/
+
+namespace Expr
+
+lemma literal_mono (v : Val) : Expr.Mono (literal v) := fun _ h ↦ h
+
+lemma var_mono (x : Var) : Expr.Mono (var x) := fun hle h ↦ (Mem.le_iff.mp hle) x _ h
+
+lemma equals_iff {e₁ e₂ : Expr} (h₁ : Expr.Mono e₁) (h₂ : Expr.Mono e₂) {σ : Mem} :
+    (e₁ == e₂) σ ↔ (e₁ σ).isSome ∧ e₁ σ = e₂ σ := by
+  refine MProp.upClose_iff (fun {σ τ} hle ⟨hs, heq⟩ ↦ ?_)
+  obtain ⟨v, hv⟩ := Option.isSome_iff_exists.mp hs
+  rw [h₁ hle hv, h₂ hle (heq ▸ hv)]
+  exact ⟨rfl, rfl⟩
+
+/-- The value of a variable, as an assertion about memories. -/
+lemma var_equals_literal_iff {x : Var} {v : Val} {σ : Mem} :
+    ($ x == literal v) σ ↔ σ x = some v := by
+  rw [equals_iff (var_mono x) (literal_mono v)]
+  simp only [var, literal]
+  constructor
+  · exact fun h ↦ h.2
+  · intro h; rw [h]; exact ⟨rfl, rfl⟩
+
+/-- Equality of two variables, as an assertion about memories. -/
+lemma var_equals_var_iff {x y : Var} {σ : Mem} :
+    ($ x == $ y) σ ↔ (σ x).isSome ∧ σ x = σ y :=
+  equals_iff (var_mono x) (var_mono y)
+
+end Expr
+
+namespace MProp
+
+lemma own_iff {e : Expr} (h : Expr.Mono e) {σ : Mem} : own e σ ↔ (e σ).isSome := by
+  refine upClose_iff (fun {σ τ} hle hs ↦ ?_)
+  obtain ⟨v, hv⟩ := Option.isSome_iff_exists.mp hs
+  rw [h hle hv]; rfl
+
+lemma own_var_iff {x : Var} {σ : Mem} : own ($ x) σ ↔ (σ x).isSome :=
+  own_iff (Expr.var_mono x)
+
+end MProp
+
+
 def OProp := ProbSpace → Prop
 
 abbrev Event := Set Mem

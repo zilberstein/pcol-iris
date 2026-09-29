@@ -3,6 +3,8 @@ import PcolIris.OProp.Laws
 
 namespace Pcol
 
+noncomputable section
+
 open MProp
 open OProp
 
@@ -56,7 +58,7 @@ invariant `𝓘` (which only constrains the variable `y`). -/
 lemma inv_of_y_eq (v : Val) (hv : v = 0 ∨ v = 1) :
     ($"y" == Expr.literal v) ⊢ 𝓘.to_MProp := by
   intro σ hσ
-  have hy : σ "y" = some v := hσ.2
+  have hy : σ "y" = some v := Expr.var_equals_literal_iff.mp hσ
   have hmem : "y" ∈ 𝓘.dom := rfl
   refine ⟨?_, ?_⟩
   · rw [Mem.restrict_dom]
@@ -83,10 +85,8 @@ lemma exists_y_of_inv :
   have hy := hσ.2
   rw [Mem.restrict_apply_of_mem σ hmem] at hy
   rcases hy with hy | hy
-  · exact ⟨_, ⟨⟨0, by simp⟩, rfl⟩,
-      ⟨by simp [Expr.var, hy], by simp [Expr.var, Expr.literal, hy]⟩⟩
-  · exact ⟨_, ⟨⟨1, by simp⟩, rfl⟩,
-      ⟨by simp [Expr.var, hy], by simp [Expr.var, Expr.literal, hy]⟩⟩
+  · exact ⟨_, ⟨⟨0, by simp⟩, rfl⟩, Expr.var_equals_literal_iff.mpr hy⟩
+  · exact ⟨_, ⟨⟨1, by simp⟩, rfl⟩, Expr.var_equals_literal_iff.mpr hy⟩
 
 /-- The invariant `𝓘` guarantees that the variable `y` is allocated. -/
 lemma own_y_of_inv : 𝓘.to_MProp ⊢ MProp.own ($"y") := by
@@ -95,7 +95,7 @@ lemma own_y_of_inv : 𝓘.to_MProp ⊢ MProp.own ($"y") := by
   have hy := hσ.2
   rw [Mem.restrict_apply_of_mem σ hmem] at hy
   rcases hy with hy | hy <;>
-    exact (show (σ "y").isSome = true by rw [hy]; rfl)
+    exact MProp.own_var_iff.mpr (by rw [hy]; rfl)
 
 /-! ### The Bernoulli distribution with parameter `1/2` -/
 
@@ -159,9 +159,10 @@ lemma xor_entails (v u : Val) :
     (iprop(($"x₁" == Expr.literal v) ∧ (($"x₂" == Expr.literal u) ∧ own ($"z"))) : MProp) ⊢
       iprop((Expr.xor ($"x₁") ($"x₂") == Expr.literal (xorVal v u)) ∧ own ($"z")) := by
   intro σ hσ
-  obtain ⟨⟨-, hx₁⟩, ⟨-, hx₂⟩, hzo⟩ := hσ
-  have hxor : Expr.xor ($"x₁") ($"x₂") σ = some (xorVal v u) := Expr.xor_eval hx₁ hx₂
-  exact ⟨⟨by rw [hxor]; rfl, by rw [hxor]; rfl⟩, hzo⟩
+  obtain ⟨hx₁, hx₂, hzo⟩ := hσ
+  have hxor : Expr.xor ($"x₁") ($"x₂") σ = some (xorVal v u) :=
+    Expr.xor_eval (Expr.var_equals_literal_iff.mp hx₁) (Expr.var_equals_literal_iff.mp hx₂)
+  exact ⟨MProp.upClose_of ⟨by rw [hxor]; rfl, by rw [hxor]; rfl⟩, hzo⟩
 
 /-- After both `x₁` and `x₂` are known, the assignment to `z` establishes the value of `z`. -/
 lemma wp_z_assign {F : ProbSpace → Prop} (v u : Val) :
@@ -219,7 +220,7 @@ lemma wp_x2_sample {F : ProbSpace → Prop} (v : Val) (hv : v = 0 ∨ v = 1) :
   isplitl [hx₂]
   · irevert hx₂
     iapply sure_weaken (Q := iprop(((0.5 : Expr) == Expr.literal 0.5) ∧ own ($"x₂")))
-    intro σ hσ; exact ⟨⟨rfl, rfl⟩, hσ⟩
+    intro σ hσ; exact ⟨MProp.upClose_of ⟨rfl, rfl⟩, hσ⟩
   · iintro ⟨hb, -⟩
     iapply wp_after_sample v hv; iframe
 
@@ -275,7 +276,7 @@ lemma entropy_mixer_spec :
   iapply wp_assign "y" 0 _ 0; isplitl [hy]
   · irevert hy; iapply sure_weaken; iintro hy
     isplit
-    · intro _ _; exact ⟨rfl, rfl⟩
+    · intro _ _; exact MProp.upClose_of ⟨rfl, rfl⟩
     · iapply hy
   · iintro hy
     iapply wp_conseq (φ := iprop(ψ ∗ ⌈ 𝓘.to_MProp ⌉)) (ψ := ψ)
@@ -302,11 +303,13 @@ lemma entropy_mixer_spec :
             iapply wp_assign "y" 1 _ 1
             isplitl [hinv]
             · irevert hinv; iapply sure_weaken
-              intro σ hσ; exact ⟨⟨rfl, rfl⟩, own_y_of_inv σ hσ⟩
+              intro σ hσ; exact ⟨MProp.upClose_of ⟨rfl, rfl⟩, own_y_of_inv σ hσ⟩
             · iintro hy
               isplit
               · intro _ _; trivial
               · irevert hy; iapply sure_weaken
                 intro σ hσ; exact inv_of_y_eq 1 (Or.inr rfl) σ hσ.1
+
+end
 
 end Pcol
