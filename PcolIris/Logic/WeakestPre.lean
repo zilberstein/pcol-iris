@@ -11,8 +11,8 @@ namespace Pcol
 
 open MProp
 
-def wp_base (𝓘 : Inv) (F : ProbSpace → Prop) (c : Cmd Act) (ψ : OProp) : OProp :=
-  fun 𝓟 ↦
+def wp_base (𝓘 : Inv) (F : ProbSpace → Prop) (c : Cmd Act) (ψ : OProp) : OProp where
+  prop 𝓟 :=
     ∀ (μ : Distr Mem) (𝓟fr 𝓙 : ProbSpace),
       -- The frame validity predicate holds
       F 𝓟fr →
@@ -24,6 +24,7 @@ def wp_base (𝓘 : Inv) (F : ProbSpace → Prop) (c : Cmd Act) (ψ : OProp) : O
       -- Then `ν` refines some probability space `𝓠`, which satisfies the postcondition `ψ`,
       -- together with the same frame and a space satisfying the invariant
         ∃ 𝓠 𝓙', Framed 𝓘 𝓠 𝓟fr 𝓙' ν ∧ ψ 𝓠
+  upcl := fun hle h μ 𝓟fr 𝓙 hF hf ν hν ↦ h μ 𝓟fr 𝓙 hF (hf.mono hle) ν hν
 
 /-- The standard "strong" wp allows any frame -/
 def wp (𝓘 : Inv) : Cmd Act → OProp → OProp := wp_base 𝓘 (fun _ ↦ True)
