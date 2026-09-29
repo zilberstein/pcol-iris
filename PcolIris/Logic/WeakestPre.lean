@@ -130,9 +130,11 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
   refine ⟨𝓠₁ ⊗ 𝓠₂, ?_,
     ⟨𝓠₁, 𝓠₂, sorry, le_refl _, (hQ₁ 𝓠₁).mp (le_refl _), (hQ₂ 𝓠₂).mp (le_refl _)⟩⟩
   -- The initial distribution refines the two preconditions, the frame and the invariant
+  -- TODO: the disjointness side conditions of `product_mono_left` will be provided by
+  -- `wp_base` once it records that the frame and the invariant are disjoint from `𝓟`
   have hμ : ((𝓟₁ ⊗ 𝓟₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ) :=
     Distr.Refines.mono
-      (ProbSpace.product_mono_left (ProbSpace.product_mono_left hle)) hre
+      (ProbSpace.product_mono_left (ProbSpace.product_mono_left hle sorry) sorry) hre
   -- Each thread, run in isolation with an arbitrary frame, establishes its postcondition;
   -- by precision, the least such postcondition space is `𝓠ₖ`
   have hthread₁ : ∀ (𝓕 : ProbSpace) (μ₁ : Distr Mem),
@@ -142,7 +144,8 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
     intro 𝓕 μ₁ hre₁ ν₁ hν₁
     obtain ⟨𝓠, href, hψ⟩ := h₁ μ₁ 𝓕 True.intro hre₁ ν₁ hν₁
     exact Distr.Refines.mono
-      (ProbSpace.product_mono_left (ProbSpace.product_mono_left ((hQ₁ 𝓠).mpr hψ))) href
+      (ProbSpace.product_mono_left
+        (ProbSpace.product_mono_left ((hQ₁ 𝓠).mpr hψ) sorry) sorry) href
   have hthread₂ : ∀ (𝓕 : ProbSpace) (μ₂ : Distr Mem),
       ((𝓟₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ₂) →
       ∀ ν₂ ∈ ConvexPowerset.singleton' μ₂ >>= 𝓛 (c₂.withInv 𝓘).to_pom,
@@ -150,7 +153,8 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
     intro 𝓕 μ₂ hre₂ ν₂ hν₂
     obtain ⟨𝓠, href, hψ⟩ := h₂ μ₂ 𝓕 True.intro hre₂ ν₂ hν₂
     exact Distr.Refines.mono
-      (ProbSpace.product_mono_left (ProbSpace.product_mono_left ((hQ₂ 𝓠).mpr hψ))) href
+      (ProbSpace.product_mono_left
+        (ProbSpace.product_mono_left ((hQ₂ 𝓠).mpr hψ) sorry) sorry) href
   -- The parallel composition is handled by Lemma C.6
   rw [Cmd.withInv, Cmd.to_pom] at hν
   exact lemma_C6 hμ hthread₁ hthread₂ ν hν

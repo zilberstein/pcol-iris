@@ -577,29 +577,65 @@ same σ-algebra, the same measure (on all sets), the same domain, the same suppo
 states agree at every point of that support (hence almost everywhere).
 -/
 
-structure LE_ProbSpace (p q : ProbSpace) : Prop where
-  mspace : p.mspace ≤ q.mspace
-  μ : ∀ E, p.mspace.MeasurableSet' E → p.μ E = q.μ E
+/--
+`Relabels p q g` states that `q` carries at least as much information as `p`, where the
+outcome `i` of `q` is seen as the outcome `g i` of `p`:
+
+* `g` is measurable and measure-preserving from `q` to `p`, so every event of `p` is an event
+  of `q` with the same probability;
+* `q` owns at least the variables of `p`;
+* on the support of `q` (i.e. almost surely), the memory of `q` extends the memory of `p`.
+
+Since the sample space `ℕ` is only an index set, spaces that differ by a relabeling of their
+outcomes carry the same information; the map `g` makes the order insensitive to such
+relabelings.  Outcomes of probability zero are irrelevant, so memories are only compared on
+the support.
+-/
+structure Relabels (p q : ProbSpace) (g : ℕ → ℕ) : Prop where
+  mspace : ∀ E, p.mspace.MeasurableSet' E → q.mspace.MeasurableSet' (g ⁻¹' E)
+  μ : ∀ E, p.mspace.MeasurableSet' E → q.μ (g ⁻¹' E) = p.μ E
   dom : p.dom ⊆ q.dom
-  state : ∀ i, p.state i ≤ q.state i
+  state : ∀ i ∈ q.support, p.state (g i) ≤ q.state i
+
+namespace Relabels
+
+variable {p q r : ProbSpace} {g h : ℕ → ℕ}
+
+/-- A measure-preserving relabeling maps the support into the support. -/
+lemma mem_support (hg : Relabels p q g) {i : ℕ} (hi : i ∈ q.support) : g i ∈ p.support := by
+  have hm := hg.mspace _ (support_measurableSet p)
+  have h1 : (@ProbabilityMeasure.toMeasure ℕ q.mspace q.μ) (g ⁻¹' p.support) = 1 := by
+    rw [← μ_eq_one_iff, hg.μ _ (support_measurableSet p), μ_eq_one_iff]
+    exact measure_support p
+  exact support_subset hm h1 hi
+
+lemma refl (p : ProbSpace) : Relabels p p id :=
+  ⟨fun _ hE ↦ hE, fun _ _ ↦ rfl, Set.Subset.refl _, fun _ _ ↦ le_refl _⟩
+
+lemma trans (hg : Relabels p q g) (hh : Relabels q r h) : Relabels p r (g ∘ h) where
+  mspace E hE := hh.mspace _ (hg.mspace E hE)
+  μ E hE := (hh.μ _ (hg.mspace E hE)).trans (hg.μ E hE)
+  dom := hg.dom.trans hh.dom
+  state i hi := (hg.state _ (hh.mem_support hi)).trans (hh.state i hi)
+
+end Relabels
 
 instance : LE ProbSpace where
-  le p q := LE_ProbSpace p q
+  le p q := ∃ g, Relabels p q g
 
 instance : Preorder ProbSpace where
-  le_refl p := by
-    constructor
-    · exact le_refl _
-    · intro _ _; rfl
-    · exact Set.Subset.refl _
-    · intro _; exact le_refl _
-  le_trans p q r hpq hqr := by
-    constructor
-    · exact hpq.mspace.trans hqr.mspace
-    · intro E hE; apply (hpq.μ E hE).trans
-      exact hqr.μ E (hpq.mspace E hE)
-    · exact hpq.dom.trans hqr.dom
-    · intro i; exact (hpq.state i).trans <| hqr.state i
+  le_refl p := ⟨id, Relabels.refl p⟩
+  le_trans _ _ _ := fun ⟨g, hg⟩ ⟨h, hh⟩ ↦ ⟨g ∘ h, hg.trans hh⟩
+
+/-- The order, in the special case where no relabeling is needed. -/
+lemma le_of_id {p q : ProbSpace}
+    (hm : ∀ E, p.mspace.MeasurableSet' E → q.mspace.MeasurableSet' E)
+    (hμ : ∀ E, p.mspace.MeasurableSet' E → p.μ E = q.μ E)
+    (hdom : p.dom ⊆ q.dom) (hst : ∀ i ∈ q.support, p.state i ≤ q.state i) : p ≤ q :=
+  ⟨id, hm, fun E hE ↦ (hμ E hE).symm, hdom, hst⟩
+
+lemma dom_mono {p q : ProbSpace} (h : p ≤ q) : p.dom ⊆ q.dom :=
+  let ⟨_, hg⟩ := h; hg.dom
 
 instance : Membership (Set ℕ) ProbSpace where
   mem 𝓟 := 𝓟.mspace.MeasurableSet'
@@ -608,17 +644,23 @@ end ProbSpace
 
 namespace Distr
 
+/--
+A distribution `ξ` over memories refines the probability space `𝓟` when `ξ` arises from a
+distribution `ξ'` over outcomes labelled by memories `f`, such that this discrete space
+carries at least the information of `𝓟`: the relabeling `g` is measure-preserving from
+`ξ'` to `𝓟`, and on the support of `ξ'` the memories `f` extend those of `𝓟`.
+-/
 def Refines (ξ : Distr Mem) (𝓟 : ProbSpace) : Prop :=
-  ∃ ξ' : PMF ℕ, ∃ f : ℕ → Mem,
-    (∀ {E}, E ∈ 𝓟 → 𝓟.μ E = ∑' i : E, ξ' i) ∧
-    (∀ i, 𝓟.state i ≤ f i) ∧
+  ∃ ξ' : PMF ℕ, ∃ f : ℕ → Mem, ∃ g : ℕ → ℕ,
+    (∀ {E}, E ∈ 𝓟 → 𝓟.μ E = ∑' i : ↑(g ⁻¹' E), ξ' i) ∧
+    (∀ i ∈ ξ'.support, 𝓟.state (g i) ≤ f i) ∧
     ξ = ξ'.map (some ∘ f)
 
 namespace Refines
 
 lemma bot_0 {ξ : Distr Mem} {p : ProbSpace}
     (h : Distr.Refines ξ p) : ξ ⊥ = 0 := by
-  obtain ⟨ξ', f, -, -, rfl⟩ := h
+  obtain ⟨ξ', f, -, -, -, rfl⟩ := h
   change (ξ'.map (some ∘ f) : PMF (WithBot Mem)) ⊥ = 0
   rw [PMF.map_apply]
   simp
