@@ -928,6 +928,18 @@ lemma wp_nondet {κ : Type} [Countable κ] {ψ : OProp} (h : ψ.Precise) :
     OProp.nondet (fun (_ : κ) => wp_base 𝓘 F c ψ) ⊢ wp_base 𝓘 F c ψ :=
   Iris.BI.Entails.trans wp_nsplit (wp_conseq (OProp.nondet_collapse h))
 
+/-- The `Exists` rule, in the form in which the examples use it.
+
+**This statement is not valid, and is left unproven.**  In the paper, the precondition of the
+`Exists` rule is only the pure assertion `⌈∃X ∈ E. P⌉`; the rest of the state is in the
+(weak) frame.  Here the wand lets the rule be applied under an arbitrary context, which makes
+it derive the implication `⌈y ∈ {0,1}⌉ ∗ (x ~ Bern p) ⇒ & (⌈y ↦ Y⌉ ∗ x ~ Bern p)` that the
+paper points out is unsound (Section 4): take `c = skip`, `ψ = (x ~ Bern ½) ∗ & ⌈y ↦ Y⌉`,
+and an initial distribution in which `y = x`.  (With an arbitrary `F`, the premise is also
+vacuous when `F` holds of no frame.)  A sound version needs the precondition to consist of
+the pure assertion only, and the uses in the examples to frame the rest of their state around
+it, which the weak triples of this development (`wp_weak`: frames without probabilistic
+information) do not allow in general. -/
 lemma wp_exists {ι : Type} [Countable ι] {P : ι → MProp} :
     ((& fun i ↦ ⌈P i⌉) -∗ wp_base 𝓘 F c ψ)
     ⊢ ⌈ iprop( ∃ i, P i ) ⌉ -∗ wp_weak 𝓘 c ψ := by
