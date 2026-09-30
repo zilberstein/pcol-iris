@@ -378,6 +378,33 @@ lemma extend_restrict_sdiff {σ : Mem} {x : Var} {v : Val} (h : σ x = some v) :
     · exact restrict_apply_of_mem _ ⟨hy, Ne.symm hxy⟩
     · rw [restrict_apply_of_notMem _ (fun h' ↦ hy h'.1), notMem_dom_iff.mp hy]
 
+lemma singleton_union (x : Var) (u : Val) (σ : Mem) : (Mem.singleton x u ⊎ σ) = σ.extend x u := by
+  funext y
+  by_cases hxy : x = y
+  · subst hxy
+    simp only [union, singleton, extend_apply_self]
+  · rw [extend_apply_of_ne u hxy]
+    simp only [union, singleton, extend_apply_of_ne u hxy, emp]
+
+/-- Updating `x` in a memory below `s` gives a memory below `s` with `x` replaced. -/
+lemma extend_le_restrict_union {σ s : Mem} (h : σ ≤ s) (x : Var) (u : Val) :
+    σ.extend x u ≤ (s.restrict (s.dom \ {x}) ⊎ Mem.singleton x u) := by
+  rw [le_iff] at h ⊢
+  intro y w hy
+  by_cases hxy : x = y
+  · subst hxy
+    rw [extend_apply_self] at hy
+    rw [union_apply_of_notMem_dom (fun h' ↦ ?_)]
+    · simp only [singleton, extend_apply_self]; exact hy
+    · rw [restrict_dom] at h'; exact h'.2.2 rfl
+  · rw [extend_apply_of_ne u hxy] at hy
+    have hs := h y w hy
+    rw [union_apply_of_mem_dom]
+    · rw [restrict_apply_of_mem _ (show y ∈ s.dom \ {x} from ⟨mem_dom_of_eq_some hs, Ne.symm hxy⟩)]
+      exact hs
+    · rw [restrict_dom]
+      exact ⟨mem_dom_of_eq_some hs, mem_dom_of_eq_some hs, Ne.symm hxy⟩
+
 /-- A memory below `m` stays below `τ ⊎ m` if `τ` does not overwrite it. -/
 lemma le_union_of_le {σ τ m : Mem} (h : σ ≤ m) (hd : Disjoint τ.dom σ.dom) : σ ≤ (τ ⊎ m) := by
   rw [le_iff] at h ⊢
