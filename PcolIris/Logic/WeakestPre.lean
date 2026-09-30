@@ -430,7 +430,43 @@ lemma wp_share {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ψ : OProp} 
     apply ConvexPowerset.bind_monotone (le_refl _)
     apply (Pom.lin_continuous (act := WithInv Act) (test := Test)).monotone
     exact Cmd.withInv_monotone c (Inv.le_emp 𝓘)
-  sorry
+  have hf₁ := hf.mono hle
+  have h12f : Disjoint (𝓟₁.dom ∪ 𝓟₂.dom) 𝓟fr.dom := hf₁.disj_frame
+  have h12fJ : Disjoint ((𝓟₁.dom ∪ 𝓟₂.dom) ∪ 𝓟fr.dom) 𝓙.dom := hf₁.disj_inv
+  have h1f : Disjoint 𝓟₁.dom 𝓟fr.dom := h12f.mono_left Set.subset_union_left
+  have h2J : Disjoint 𝓟₂.dom 𝓙.dom :=
+    h12fJ.mono_left (Set.subset_union_right.trans Set.subset_union_left)
+  have hfJ : Disjoint 𝓟fr.dom 𝓙.dom := h12fJ.mono_left Set.subset_union_right
+  -- The shared resource becomes part of the invariant's space
+  have hf' : Framed 𝓘 𝓟₂ 𝓟fr (𝓟₁ ⊗ 𝓙) μ := by
+    refine ⟨(OProp.sure _).mono (ProbSpace.le_product_left _ _) h𝓘,
+      h12f.mono_left Set.subset_union_right, ?_, ?_⟩
+    · change Disjoint (𝓟₂.dom ∪ 𝓟fr.dom) (𝓟₁.dom ∪ 𝓙.dom)
+      exact Set.disjoint_union_left.mpr ⟨Set.disjoint_union_right.mpr ⟨hdisj.symm, h2J⟩,
+        Set.disjoint_union_right.mpr ⟨h1f.symm, hfJ⟩⟩
+    · refine Distr.Refines.mono ((ProbSpace.product_assoc' _ _ _).trans
+        (ProbSpace.product_mono_left ?_ h12fJ)) hf₁.refines
+      exact (ProbSpace.product_comm (Set.disjoint_union_right.mpr ⟨hdisj, h1f⟩)).trans
+        (ProbSpace.product_assoc' _ _ _)
+  obtain ⟨hk, 𝓠, 𝓙', hfQ, hdomQ, hψ⟩ := hwp μ 𝓟fr (𝓟₁ ⊗ 𝓙) hF hf' ν hν'
+  obtain ⟨𝓙₀, hJ₀, -, hfQ₀⟩ := hfQ.shrink_inv
+  have h𝓘dom : 𝓘.dom ⊆ 𝓟₁.dom := (OProp.sure_forget 𝓘.footprint h𝓘).1
+  have hQJ : Disjoint 𝓠.dom 𝓙₀.dom := hfQ₀.disj_inv.mono_left Set.subset_union_left
+  have hfJ₀ : Disjoint 𝓟fr.dom 𝓙₀.dom := hfQ₀.disj_inv.mono_left Set.subset_union_right
+  refine ⟨hk, 𝓠 ⊗ 𝓙₀, ProbSpace.unit, ⟨fun k _ ↦ ?_, ?_, ?_, ?_⟩, ?_,
+    𝓠, 𝓙₀, hQJ, le_refl _, hψ, hfQ₀.inv⟩
+  · change Mem.dom _ = ∅
+    rw [Mem.restrict_dom]; exact Set.inter_empty _
+  · exact Set.disjoint_union_left.mpr ⟨hfQ₀.disj_frame, hfJ₀.symm⟩
+  · exact Set.disjoint_empty _
+  · refine Distr.Refines.mono ?_ hfQ₀.refines
+    exact ((ProbSpace.product_comm (Set.empty_disjoint _)).trans
+      (ProbSpace.product_unit_le _)).trans (ProbSpace.product_swap_right hfJ₀
+        (Set.disjoint_union_right.mpr ⟨hfQ₀.disj_frame, hQJ⟩))
+  · change 𝓠.dom ∪ 𝓙₀.dom ⊆ 𝓟.dom
+    rw [hJ₀]
+    exact (Set.union_subset (hdomQ.trans Set.subset_union_right)
+      (h𝓘dom.trans Set.subset_union_left)).trans (ProbSpace.dom_mono hle)
 
 lemma wp_atom {𝓘 : Inv} {F : ProbSpace → Prop} {a : Act} {ψ : OProp} :
     (OProp.sure 𝓘.to_MProp -∗ wp_base Inv.emp F (Cmd.act a) (iprop(ψ ∗ OProp.sure 𝓘.to_MProp)))
