@@ -30,3 +30,39 @@ lemma mem_while_iff {e : Expr} {c : Cmd Act} {𝓘 : Inv} {μ : Distr Mem} {ν :
   change ν ∈ (ConvexPowerset.singleton' μ).bind (ωSup cf) ↔ _
   rw [← h, mem_ωSup]
   rfl
+
+lemma loopIter_zero (e : Expr) (f : Mem → ConvexPowerset Mem) : loopIter e f 0 = ⊥ := rfl
+
+/-- One more unrolling: test the guard, and either run the body and continue, or stop. -/
+lemma loopIter_succ (e : Expr) (f : Mem → ConvexPowerset Mem) (n : ℕ) (σ : Mem) :
+    loopIter e f (n + 1) σ =
+      (Linearization.Sem.sem (Test.lift e) σ : ConvexPowerset Bool) >>= fun r ↦
+        bif r then f σ >>= loopIter e f n else pure σ := by
+  unfold loopIter
+  rw [Function.iterate_succ', Function.comp_apply]
+  rfl
+
+/-- An unrolling stops where the guard is false. -/
+lemma loopIter_succ_of_false {e : Expr} {σ : Mem} (he : e σ = some 0)
+    (f : Mem → ConvexPowerset Mem) (n : ℕ) : loopIter e f (n + 1) σ = pure σ := by
+  rw [loopIter_succ]
+  have : (Linearization.Sem.sem (Test.lift e) σ : ConvexPowerset Bool) = pure false := by
+    change (match e σ with
+      | some q => pure (decide (q ≠ 0))
+      | none => ⊥ : ConvexPowerset Bool) = _
+    rw [he]; norm_num
+  rw [this, ConvexPowerset.pure_bind]
+  rfl
+
+/-- An unrolling runs the body where the guard is true. -/
+lemma loopIter_succ_of_true {e : Expr} {σ : Mem} (he : e σ = some 1)
+    (f : Mem → ConvexPowerset Mem) (n : ℕ) :
+    loopIter e f (n + 1) σ = f σ >>= loopIter e f n := by
+  rw [loopIter_succ]
+  have : (Linearization.Sem.sem (Test.lift e) σ : ConvexPowerset Bool) = pure true := by
+    change (match e σ with
+      | some q => pure (decide (q ≠ 0))
+      | none => ⊥ : ConvexPowerset Bool) = _
+    rw [he]; norm_num
+  rw [this, ConvexPowerset.pure_bind]
+  rfl
