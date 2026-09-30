@@ -75,6 +75,62 @@ lemma Det.bind {k : α → ConvexPowerset β} {d : Distr α} {D : α → Distr �
   · exact absurd hd ((PMF.mem_support_iff _ _).mp hy)
   · exact hk x hy _ (hf _ hy)
 
+/-- **Mixing choices.**  If, from each `m`, a distribution `R m` is followed by choices
+`f m x` in a convex set `S x` that does not depend on `m`, then the result is a run of `S`
+from the average `μ.bind R`: the choices made for the same `x` from different `m` are
+averaged (with the posterior probabilities of the `m` given `x`). -/
+theorem mem_bind_of_mixture {γ : Type} (μ : PMF γ) (R : γ → Distr α) {f : γ → WithBot α → Distr β}
+    {S : α → ConvexPowerset β}
+    (hf : ∀ m ∈ μ.support, ∀ x : α, (↑x : WithBot α) ∈ PMF.support (R m) → f m x ∈ S x) :
+    (μ.bind fun m ↦ (R m).bind (f m)) ∈ ConvexPowerset.singleton' (μ.bind R) >>= S := by
+  classical
+  set ρ : Distr α := μ.bind R with hρdef
+  have hρ : ∀ y, ρ y = ∑' m, μ m * R m y := fun y ↦ PMF.bind_apply _ _ _
+  let post : ∀ y, ρ y ≠ 0 → PMF γ := fun y hy ↦ PMF.normalize (fun m ↦ μ m * R m y)
+    (by rw [← hρ]; exact hy) (by rw [← hρ]; exact PMF.apply_ne_top _ _)
+  let F : WithBot α → Distr β := fun y ↦
+    if hy : ρ y ≠ 0 then (post y hy).bind (fun m ↦ f m y) else PMF.pure ⊥
+  refine mem_bind.mpr ⟨ρ, self_mem_singleton' _, F, fun y hy ↦ ?_, ?_⟩
+  · rcases y with _ | x
+    · exact Set.mem_univ _
+    · have hy' : ρ x ≠ 0 := (PMF.mem_support_iff _ _).mp hy
+      change F x ∈ S x
+      simp only [F, dif_pos hy']
+      refine countably_convex' fun m hm ↦ ?_
+      rw [PMF.mem_support_normalize_iff] at hm
+      exact hf m ((PMF.mem_support_iff _ _).mpr (left_ne_zero_of_mul hm)) x
+        ((PMF.mem_support_iff _ _).mpr (right_ne_zero_of_mul hm))
+  · -- The two ways of computing the result agree
+    have key : ∀ y z, (ρ : PMF (WithBot α)) y * (F y : PMF (WithBot β)) z =
+        ∑' m, μ m * ((R m : PMF (WithBot α)) y * (f m y : PMF (WithBot β)) z) := by
+      intro y z
+      by_cases hy : ρ y = 0
+      · have hy' : (ρ : PMF (WithBot α)) y = 0 := hy
+        rw [hy', zero_mul]
+        have h0 := ENNReal.tsum_eq_zero.mp ((hρ y).symm.trans hy)
+        refine (ENNReal.tsum_eq_zero.mpr fun m ↦ ?_).symm
+        rw [← mul_assoc]
+        rw [show μ m * (R m : PMF (WithBot α)) y = 0 from h0 m, zero_mul]
+      · simp only [F]
+        rw [dif_pos hy]
+        change ρ y * ∑' m, post y hy m * (f m y : PMF (WithBot β)) z = _
+        rw [← ENNReal.tsum_mul_left]
+        refine tsum_congr fun m ↦ ?_
+        change ρ y * ((μ m * R m y * (∑' x, μ x * R x y)⁻¹) * (f m y : PMF (WithBot β)) z) = _
+        rw [← hρ, show ∀ a b c d e : ENNReal, a * (b * c * d * e) = b * (c * e) * (a * d) by
+          intros; ring, ENNReal.mul_inv_cancel hy (PMF.apply_ne_top _ _), mul_one]
+    refine PMF.ext fun z ↦ ?_
+    have lhs : (μ.bind fun m ↦ (R m).bind (f m)) z =
+        ∑' m, μ m * ∑' y, (R m : PMF (WithBot α)) y * (f m y : PMF (WithBot β)) z := by
+      rw [PMF.bind_apply]
+      exact tsum_congr fun m ↦ by rw [PMF.bind_apply]; rfl
+    have rhs : ((ρ : PMF (WithBot α)).bind F) z =
+        ∑' y, (ρ : PMF (WithBot α)) y * (F y : PMF (WithBot β)) z := PMF.bind_apply _ _ _
+    rw [lhs, rhs]
+    simp_rw [key]
+    rw [ENNReal.tsum_comm]
+    exact tsum_congr fun m ↦ ENNReal.tsum_mul_left.symm
+
 end ConvexPowerset
 
 namespace Pcol
@@ -101,6 +157,56 @@ lemma replace_supportedIn (h : 𝓘.prop (σ.restrict 𝓘.dom)) :
   exact Set.singleton_subset_iff.mpr ⟨τ.val, 𝓘.prop_finite.mem_toFinset.mp τ.2, rfl⟩
 
 end Inv
+
+lemma Inv.emp_check (σ : Mem) : Inv.emp.check σ = pure σ :=
+  Inv.check_of (by change Mem.dom _ = ∅; rw [Mem.restrict_dom]; exact Set.inter_empty _)
+
+lemma Inv.emp_replace (σ : Mem) : Inv.emp.replace σ = pure σ := by
+  classical
+  have hX : Inv.emp.prop_finite.toFinset = {Mem.emp} := by
+    ext τ
+    rw [Set.Finite.mem_toFinset, Finset.mem_singleton]
+    change τ.dom = ∅ ↔ τ = Mem.emp
+    refine ⟨fun h ↦ funext fun x ↦ Mem.notMem_dom_iff.mp (by rw [h]; exact id), ?_⟩
+    rintro rfl; exact Mem.emp_dom
+  unfold Inv.replace
+  rw [Nondet.finset_singleton Mem.emp hX]
+  rfl
+
+/-- Without an invariant, an action runs as itself. -/
+lemma sem_withInv_emp (a : Act) (σ : Mem) :
+    (Sem.sem (⟨a, Inv.emp⟩ : WithInv Act) σ : ConvexPowerset Mem) = Sem.sem a σ := by
+  change (Inv.emp.check σ >>= fun σ ↦ Inv.emp.replace σ >>= fun σ ↦
+    Sem.sem a σ >>= fun τ ↦ Inv.emp.check τ : ConvexPowerset Mem) = _
+  simp only [Inv.emp_check, Inv.emp_replace, ConvexPowerset.pure_bind, bind_pure]
+
+/-- The runs of an action under an invariant, from a memory satisfying the invariant:
+interference, then the action, then the check that the invariant still holds. -/
+lemma sem_withInv_decomp {a : Act} {𝓘 : Inv} {σ : Mem} (h : 𝓘.prop (σ.restrict 𝓘.dom)) :
+    ∀ ν ∈ (Sem.sem (⟨a, 𝓘⟩ : WithInv Act) σ : ConvexPowerset Mem), ∃ ρ ∈ 𝓘.replace σ,
+      ∃ f : WithBot Mem → Distr Mem, (∀ x : Mem, (↑x : WithBot Mem) ∈ PMF.support ρ →
+        f x ∈ (Sem.sem a x >>= fun τ ↦ 𝓘.check τ : ConvexPowerset Mem)) ∧ ν = ρ.bind f := by
+  change ∀ ν ∈ (𝓘.check σ >>= fun σ ↦ 𝓘.replace σ >>= fun σ ↦
+    Sem.sem a σ >>= fun τ ↦ 𝓘.check τ : ConvexPowerset Mem), _
+  rw [Inv.check_of h, ConvexPowerset.pure_bind]
+  intro ν hν
+  obtain ⟨ρ, hρ, f, hf, rfl⟩ := ConvexPowerset.mem_bind.mp hν
+  exact ⟨ρ, hρ, f, fun x hx ↦ hf x hx, rfl⟩
+
+/-- A run followed by a check of the invariant is a plain run, if every run ends in memories
+satisfying the invariant. -/
+lemma mem_of_bind_check {𝓘 : Inv} {S : ConvexPowerset Mem} {g : Distr Mem}
+    (h : g ∈ (S >>= fun τ ↦ 𝓘.check τ)) (hS : ∀ g' ∈ S, ∀ y ∈ PMF.support g',
+      ∃ m : Mem, y = m ∧ 𝓘.prop (m.restrict 𝓘.dom)) : g ∈ S := by
+  obtain ⟨g', hg', k, hk, rfl⟩ := ConvexPowerset.mem_bind.mp h
+  convert hg' using 1
+  conv_rhs => rw [← PMF.bind_pure g']
+  refine Distr.bind_congr_support' g' fun y hy ↦ ?_
+  obtain ⟨m, rfl, hm⟩ := hS g' hg' y hy
+  have := hk m hy
+  change k m ∈ (𝓘.check m : ConvexPowerset Mem) at this
+  rw [Inv.check_of hm] at this
+  exact (ConvexPowerset.mem_pure m).mp this
 
 /-- The possible outcomes of an action run under an invariant, from a memory satisfying the
 invariant: if the action, run after any interference, only produces memories in `G` that
