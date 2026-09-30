@@ -100,23 +100,6 @@ lemma Bern_support {p : ℚ} {w : Val} (hw : w ∈ (Bern p).support) : w = 0 ∨
   obtain ⟨b, -, rfl⟩ := hw
   cases b <;> simp
 
-/-- The weights of a Bernoulli distribution with parameter at most `1`. -/
-lemma Bern_apply {p : ℚ} (hp1 : p ≤ 1) (w : Val) :
-    Bern p w =
-      if w = 1 then ENNReal.ofReal (p : ℝ)
-      else if w = 0 then 1 - ENNReal.ofReal (p : ℝ) else 0 := by
-  have hle : ENNReal.ofReal ((p : ℝ)) ≤ 1 := by
-    rw [ENNReal.ofReal_le_one]; exact_mod_cast hp1
-  have hq : min 1 (ENNReal.ofReal ((p : ℝ))) = ENNReal.ofReal (p : ℝ) := min_eq_right hle
-  unfold Bern
-  rw [PMF.map_apply]
-  simp only [PMF.ofFintype_apply, tsum_bool, hq]
-  by_cases h1 : w = 1
-  · simp [h1]
-  · by_cases h0 : w = 0
-    · simp [h0]
-    · simp [h0, h1]
-
 /-! ### The guard and the rank -/
 
 lemma eqTest_eval {σ : Mem} {a b : Val} (hx : σ "x" = some a) (hy : σ "y" = some b) :
@@ -292,16 +275,9 @@ def bodyMix (q : ℚ) : OProp := ⨁[Bern q] fun t ↦ if t = 1 then phi0 else p
 /-! ### Laws about mixtures
 
 The derivation below is carried out with the rules of `PcolIris.Logic.WeakestPre`.  The
-convexity laws are instances of the regrouping laws of `PcolIris.OProp.MixLaws`.  Two
-ingredients of the paper's proof are still assumed:
-
-* `oplus_bern_shift` moves probability from one branch of a mixture to the other.  The
-  paper's `BoundedRank` rule has the postcondition `⊕≥p` (a mixture with probability at least
-  `p`), whereas `wp_bounded_rank` has an exact mixture; this lemma bridges the two, but it is
-  not valid in the current model, where a branch can only be split along the events of its
-  space.  Stating `wp_bounded_rank` with `⊕≥p` would make it unnecessary.
-* `body_split` turns the two independent samples into the joint mixture over the outcome of
-  the comparison. -/
+convexity laws are instances of the regrouping laws of `PcolIris.OProp.MixLaws`.  One
+ingredient of the paper's proof is still assumed: `body_split` turns the two independent
+samples into the joint mixture over the outcome of the comparison. -/
 
 /-- **Introduction of a nondeterministic choice**: every branch of a nondeterministic choice
 entails the choice itself.  (In the semantics of the paper `&` is a union of sets of
@@ -317,15 +293,6 @@ lemma nondet_intro {iota : Type} [Countable iota] {phi : iota → OProp} (i : io
     rw [PMF.support_pure, Set.mem_singleton_iff] at hv
     subst hv
     exact (phi v).mono (ProbSpace.le_shift _ _) h
-
-/-- **Weakening of the probability of a two-branch mixture**, i.e. the passage from the
-mixture `⊕_q` to the mixture `⊕_{≥ p}` of the paper (`p ≤ q`): the excess probability
-`q - p` of the first branch is moved to the second branch, which is legitimate as soon as
-both branches entail the assertion `chi` of the second branch. -/
-lemma oplus_bern_shift {p q : ℚ} (hp : 0 ≤ p) (hpq : p ≤ q) (hq : q ≤ 1)
-    {phi psi chi : OProp} (h1 : phi ⊢ chi) (h2 : psi ⊢ chi) :
-    (⨁[Bern q] fun t ↦ if t = 1 then phi else psi) ⊢
-      ⨁[Bern p] fun t ↦ if t = 1 then phi else chi := sorry
 
 /-- **The first half of implication (23) of Appendix F.6.**  Two independent coins with the
 same bias `X` disagree with probability `2 * X * (1 - X)`, and conditioned on disagreeing
@@ -383,16 +350,14 @@ lemma bern_disagree_fair (X : ℚ) :
 /-- The postcondition of the loop body, in the form in which it is established: with
 probability `p` the loop exits with `x` a fair coin flip, and otherwise the loop invariant
 holds at some rank. -/
-def bodyPost' (p : ℚ) : OProp := ⨁[Bern p] fun t ↦ if t = 1 then phi0 else (& loopInv)
+def bodyPost' (p : ℚ) : OProp := OProp.oplusGe p phi0 (& loopInv)
 
 /-- The postcondition of the loop body demanded by the `BoundedRank` rule. -/
 def bodyPost (q : ℚ) (r : Set.Icc (0 : ℕ) 1) : OProp :=
-  ⨁[Bern q] fun t ↦
-    if t = 1 then
-      (& fun (s : Set.Ico (0 : ℕ) (r : ℕ)) ↦
-        loopInv ⟨s.val, s.property.1, (le_of_lt s.property.2).trans r.property.2⟩)
-    else
-      (& loopInv)
+  OProp.oplusGe q
+    (& fun (s : Set.Ico (0 : ℕ) (r : ℕ)) ↦
+      loopInv ⟨s.val, s.property.1, (le_of_lt s.property.2).trans r.property.2⟩)
+    (& loopInv)
 
 lemma phi0_loopInv : phi0 ⊢ & loopInv := by
   have h : phi0 = loopInv ⟨0, le_refl 0, zero_le_one⟩ := by simp [loopInv]
@@ -405,35 +370,28 @@ lemma phi1_loopInv : phi1 ⊢ & loopInv := by
 /-- The postcondition of the loop body is convex, which is the side condition of the
 `NSplit2` rule of the paper. -/
 lemma bodyPost'_convex (p : ℚ) : Convex (bodyPost' p) :=
-  Convex.oplus fun t ↦ by
-    by_cases h : t = 1
-    · rw [if_pos h]; exact Convex.of_precise phi0_precise
-    · rw [if_neg h]
-      refine Convex.nondet fun r ↦ ?_
-      unfold loopInv
-      split_ifs
-      · exact Convex.of_precise phi0_precise
-      · exact OProp.Convex.sure _
+  Convex.oplusGe (Convex.of_precise phi0_precise) (Convex.nondet fun r ↦ by
+    unfold loopInv
+    split_ifs
+    · exact Convex.of_precise phi0_precise
+    · exact OProp.Convex.sure _)
 
 /-- Implication (23) of Appendix F.6: the two-coin mixture entails the postcondition of the
 loop body, with the exit probability weakened to `2 * eps * (1 - eps)`. -/
 lemma bodyMix_bodyPost' {eps X : ℚ} (heps : 0 < eps) (heps' : eps ≤ 1 / 2)
     (hX : eps ≤ X) (hX' : X ≤ 1 - eps) :
     bodyMix (2 * X * (1 - X)) ⊢ bodyPost' (2 * eps * (1 - eps)) :=
-  oplus_bern_shift (exit_prob_nonneg heps heps') (two_mul_one_sub_mono hX hX')
-    (two_mul_one_sub_le_one X) phi0_loopInv phi1_loopInv
+  (oplusGe_of_bern (two_mul_one_sub_mono hX hX') (two_mul_one_sub_le_one X)
+    (Convex.of_precise phi0_precise) (OProp.Convex.sure _)).trans
+    (oplusGe_weaken .rfl phi1_loopInv)
 
 /-- At rank `1` the postcondition of the loop body is the one demanded by the `BoundedRank`
 rule: the rank can only decrease to `0`, where the loop invariant is `phi0`. -/
 lemma bodyPost'_bodyPost (p : ℚ) (r : Set.Icc (0 : ℕ) 1) (hr : (r : ℕ) = 1) :
-    bodyPost' p ⊢ bodyPost p r := by
-  refine OProp.oplus_weaken' fun t _ ↦ ?_
-  by_cases h : t = 1
-  · rw [if_pos h, if_pos h]
-    exact nondet_intro (phi := fun (s : Set.Ico (0 : ℕ) (r : ℕ)) ↦
+    bodyPost' p ⊢ bodyPost p r :=
+  oplusGe_weaken (nondet_intro (phi := fun (s : Set.Ico (0 : ℕ) (r : ℕ)) ↦
       loopInv ⟨s.val, s.property.1, (le_of_lt s.property.2).trans r.property.2⟩)
-      ⟨0, le_refl 0, by rw [hr]; exact Nat.zero_lt_one⟩
-  · rw [if_neg h, if_neg h]
+      ⟨0, le_refl 0, by rw [hr]; exact Nat.zero_lt_one⟩) .rfl
 
 /-- The second coin flip.  The first coin has already been sampled with the bias `X` held by
 `p'`; sampling the second one gives the two-coin mixture of the paper. -/
@@ -545,6 +503,8 @@ by the loop invariant at rank `0`, namely `phi0`. -/
 lemma wp_loop {L : Finset ℚ} (eps : ℚ)
     (heps : 0 < eps) (heps' : eps ≤ 1 / 2) (hL : ∀ v ∈ L, eps ≤ v ∧ v ≤ 1 - eps) :
     (& loopInv) ⊢ wp (inv L) (while( eqTest ($"x") ($"y") ){ body }) phi0 := by
+  suffices hw : (& loopInv) ⊢ wp_weak (inv L) (while( eqTest ($"x") ($"y") ){ body }) phi0 from
+    hw.trans (wp_strengthen phi0_precise)
   have hq : (2 * eps * (1 - eps) : ℚ) > 0 := by nlinarith
   have hexit : loopInv ⟨0, le_refl 0, zero_le_one⟩ ⊢
       ⌈eqTest ($"x") ($"y") == Expr.literal 0⌉ := by

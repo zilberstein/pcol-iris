@@ -405,20 +405,29 @@ lemma wp_bern (x : Var) (e : Expr) (v : Val) {ψ : OProp} (he : e.Local) :
       (show 𝓟₁.dom ∪ 𝓟₂.dom ⊆ 𝓟.dom from ProbSpace.dom_mono hle),
     ψ.mono (ProbSpace.product_comm (hd.mono_left hsub)) (hwand 𝓡 (hd.mono_left hsub).symm h𝓡)⟩
 
-lemma wp_bounded_rank {ℓ h : ℕ} (hle : ℓ ≤ h) {φ : Set.Icc ℓ h → OProp} {b rank : Expr} {p : ℚ} (hp : p > 0)
+/-- **The `BoundedRank` rule.**  The loop invariant `φ r` is indexed by a rank `r ∈ [ℓ, h]`
+held by the expression `rank`; the loop exits exactly at rank `ℓ`.  If every iteration
+started at a rank `r > ℓ` decreases the rank with probability at least `p > 0` (and otherwise
+ends at an arbitrary rank), then the loop terminates almost surely at rank `ℓ`.
+
+As in the paper, the rule is stated for any class of frames `F`; the strong triple follows
+from the weak one with `wp_strengthen`, since the postcondition is precise.  The paper
+requires the rank to stay at least `N` in the second branch; allowing any rank there makes
+the rule stronger and is still sound (the loop exits with probability at least `p ^ (h - ℓ)`
+from any rank). -/
+lemma wp_bounded_rank {ℓ h : ℕ} (hle : ℓ ≤ h) {φ : Set.Icc ℓ h → OProp} {b rank : Expr}
+    {p : ℚ} (hp : 0 < p)
     (hrank : ∀ r, φ r ⊢ ⌈rank == Expr.literal r⌉)
     (hexit : φ ⟨ℓ, le_refl _, hle⟩ ⊢ ⌈b == Expr.literal 0⌉)
     (hloop : ∀ {r}, r.val > ℓ → φ r ⊢ ⌈b == Expr.literal 1⌉)
     (hprec : (φ ⟨ℓ, le_refl _, hle⟩).Precise) :
-    (∀ r, ⌜r.val > 0⌝ -∗ φ r -∗
+    (∀ r, ⌜r.val > ℓ⌝ -∗ φ r -∗
       wp_base 𝓘 F c
-        (⨁[Bern p] fun x ↦
-          if x = 1 then
-            (& fun (s : Set.Ico ℓ r) ↦
-              φ ⟨s.val, s.property.1, (le_of_lt s.property.2).trans r.property.2⟩)
-          else
-            (& φ)))
-      ⊢ & φ -∗ wp 𝓘 (while( b ){ c }) (φ ⟨ℓ, le_refl _, hle⟩) := sorry
+        (OProp.oplusGe p
+          (& fun (s : Set.Ico ℓ r) ↦
+            φ ⟨s.val, s.property.1, (le_of_lt s.property.2).trans r.property.2⟩)
+          (& φ)))
+      ⊢ & φ -∗ wp_base 𝓘 F (while( b ){ c }) (φ ⟨ℓ, le_refl _, hle⟩) := sorry
 
 /-- CONCURRNCY RULES -/
 
