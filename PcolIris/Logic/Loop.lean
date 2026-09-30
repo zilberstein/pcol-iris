@@ -1,5 +1,6 @@
 import PcolIris.Semantics.Semantics
 import PcolIris.Semantics.Invariant
+import ConvexPowerset.MinProb
 
 /-!
 # Loops
@@ -65,4 +66,30 @@ lemma loopIter_succ_of_true {e : Expr} {σ : Mem} (he : e σ = some 1)
       | none => ⊥ : ConvexPowerset Bool) = _
     rw [he]; norm_num
   rw [this, ConvexPowerset.pure_bind]
+  rfl
+
+/-- The finite unrollings increase. -/
+lemma loopIter_mono (e : Expr) (f : Mem → ConvexPowerset Mem) :
+    Monotone (loopIter e f) := by
+  intro m n hmn
+  have hf := Pom.Semantics.while_sem_monotone (st := Mem) (t := ConvexPowerset)
+    (Test.lift e) f
+  exact (fixedPoints.iterateChain ⟨_, hf⟩ ⊥ bot_le).monotone hmn
+
+/-- The probability that the outcome of a loop lies in `E` (counting nontermination as not
+lying in `E`) is the limit of the corresponding probabilities for its unrollings. -/
+lemma minProb_while {e : Expr} {c : Cmd Act} {𝓘 : Inv} (μ : Distr Mem) (E : Set Mem) :
+    ConvexPowerset.minProb
+        (ConvexPowerset.singleton' μ >>= 𝓛 ((Cmd.while_loop e c).withInv 𝓘).to_pom) E =
+      ⨆ n, ConvexPowerset.minProb
+        (ConvexPowerset.singleton' μ >>= loopIter e (𝓛 (c.withInv 𝓘).to_pom) n) E := by
+  rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_while]
+  let cf : Chain (Mem → ConvexPowerset Mem) :=
+    fixedPoints.iterateChain ⟨_, Pom.Semantics.while_sem_monotone (Test.lift e)
+      (𝓛 (c.withInv 𝓘).to_pom)⟩ ⊥ bot_le
+  have h := ConvexPowerset.bind_continuous (OmegaCompletePartialOrder.const
+    (ConvexPowerset.singleton' μ)) cf
+  rw [OmegaCompletePartialOrder.ωSup_const] at h
+  change ConvexPowerset.minProb ((ConvexPowerset.singleton' μ).bind (ωSup cf)) E = _
+  rw [← h, (ConvexPowerset.minProb_ωScottContinuous E).map_ωSup]
   rfl
