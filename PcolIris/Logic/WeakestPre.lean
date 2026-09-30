@@ -468,10 +468,180 @@ lemma wp_share {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ψ : OProp} 
     exact (Set.union_subset (hdomQ.trans Set.subset_union_right)
       (h𝓘dom.trans Set.subset_union_left)).trans (ProbSpace.dom_mono hle)
 
+/-- The `Atom` rule: an atomic action may open the invariant, provided it re-establishes it.
+
+A run of the action under the invariant consists of interference on the invariant's
+variables, the action itself and a check of the invariant.  The distribution after the
+interference is framed with the precondition and a space satisfying the invariant, from which
+the action runs without interference; the nondeterministic choices of the action made from
+different initial memories are averaged (`ConvexPowerset.mem_bind_of_mixture`). -/
 lemma wp_atom {𝓘 : Inv} {F : ProbSpace → Prop} {a : Act} {ψ : OProp} :
     (OProp.sure 𝓘.to_MProp -∗ wp_base Inv.emp F (Cmd.act a) (iprop(ψ ∗ OProp.sure 𝓘.to_MProp)))
     ⊢ wp_base 𝓘 F (Cmd.act a) ψ := by
-  sorry
+  classical
+  intro 𝓟 hwand μ 𝓟fr 𝓙 hF hf ν hν
+  change ν ∈ ConvexPowerset.singleton' μ >>=
+    𝓛 (Pom.singleton (Label.act (⟨a, 𝓘⟩ : WithInv Act))) at hν
+  rw [Pom.lin_act] at hν
+  obtain ⟨K, rfl, hK⟩ := run_act hf.refines.bot_0 hν
+  set 𝓐 := 𝓟 ⊗ 𝓟fr with h𝓐def
+  have h𝓐 : 𝓐 ≼ μ := Distr.Refines.mono (ProbSpace.le_product_left _ _) hf.refines
+  have hIJ : 𝓘.dom ⊆ 𝓙.dom := (OProp.sure_forget 𝓘.footprint hf.inv).1
+  have h𝓐I : Disjoint 𝓐.dom 𝓘.dom := hf.disj_inv.mono_right hIJ
+  have hIμ : ∀ m : Mem, μ (m : WithBot Mem) ≠ 0 → 𝓘.prop (m.restrict 𝓘.dom) := fun m hm ↦
+    Distr.Refines.sure hf.refines ((OProp.sure 𝓘.to_MProp).mono
+      (ProbSpace.le_product_right hf.disj_inv) hf.inv) hm
+  -- Each run: interference, then the action, then the check
+  have hdec : ∀ m : Mem, μ (m : WithBot Mem) ≠ 0 → ∃ ρ ∈ 𝓘.replace m,
+      ∃ f : WithBot Mem → Distr Mem, (∀ x : Mem, (↑x : WithBot Mem) ∈ PMF.support ρ →
+        f x ∈ (Linearization.Sem.sem a x >>= fun τ ↦ 𝓘.check τ : ConvexPowerset Mem)) ∧ K m = ρ.bind f :=
+    fun m hm ↦ sem_withInv_decomp (hIμ m hm) _ (hK m hm)
+  choose ρ hρ f hf' hKf using hdec
+  let R : WithBot Mem → Distr Mem := ConvexPowerset.botElim fun m ↦
+    if h : μ (m : WithBot Mem) ≠ 0 then ρ m h else PMF.pure none
+  let G : WithBot Mem → WithBot Mem → Distr Mem := fun y ↦ Option.elim y (fun _ ↦ PMF.pure none)
+    fun m ↦ if h : μ (m : WithBot Mem) ≠ 0 then f m h else fun _ ↦ PMF.pure none
+  have hKRG : μ.bind K = μ.bind fun y ↦ (R y).bind (G y) := by
+    refine Distr.bind_congr_support' μ fun y hy ↦ ?_
+    rcases y with _ | m
+    · exact absurd hf.refines.bot_0 ((PMF.mem_support_iff _ _).mp hy)
+    · have hm : μ (m : WithBot Mem) ≠ 0 := (PMF.mem_support_iff _ _).mp hy
+      change K m = (if h : μ (m : WithBot Mem) ≠ 0 then ρ m h else PMF.pure none).bind
+        (if h : μ (m : WithBot Mem) ≠ 0 then f m h else fun _ ↦ PMF.pure none)
+      rw [dif_pos hm, dif_pos hm]; exact hKf m hm
+  set ρ' : Distr Mem := μ.bind R with hρ'def
+  have hρsupp : ∀ (m : Mem) (hm : μ (m : WithBot Mem) ≠ 0) y, y ∈ PMF.support (ρ m hm) →
+      y ∈ ρ'.support :=
+    fun m hm y hy ↦ (PMF.mem_support_bind_iff _ _ _).mpr ⟨m, (PMF.mem_support_iff _ _).mpr hm,
+      by change y ∈ (if h : μ (m : WithBot Mem) ≠ 0 then ρ m h else PMF.pure none).support
+         rw [dif_pos hm]; exact hy⟩
+  -- The memories after the interference
+  have hR : ∀ y ∈ ρ'.support, ∃ (m τ : Mem), μ (m : WithBot Mem) ≠ 0 ∧ 𝓘.prop τ ∧
+      y = ((τ ⊎ m : Mem) : WithBot Mem) := by
+    intro y hy
+    obtain ⟨z, hz, hy⟩ := (PMF.mem_support_bind_iff _ _ _).mp hy
+    rcases z with _ | m
+    · exact absurd hf.refines.bot_0 ((PMF.mem_support_iff _ _).mp hz)
+    · have hm : μ (m : WithBot Mem) ≠ 0 := (PMF.mem_support_iff _ _).mp hz
+      change y ∈ (if h : μ (m : WithBot Mem) ≠ 0 then ρ m h else PMF.pure none).support at hy
+      rw [dif_pos hm] at hy
+      obtain ⟨σ', ⟨τ, hτ, rfl⟩, rfl⟩ := Inv.replace_supportedIn (hIμ m hm) _ (hρ m hm) y hy
+      exact ⟨m, τ, hm, hτ, rfl⟩
+  -- After the interference, the precondition and the frame are unchanged, and a space
+  -- without probabilistic information satisfies the invariant
+  have hA : 𝓐 ≼ ρ' := by
+    refine Distr.Refines.bind (𝓐' := 𝓐) h𝓐 (fun E h ↦ h) (fun E _ ↦ rfl)
+      fun i _ m hm him y hy ↦ ?_
+    change y ∈ (if h : μ (m : WithBot Mem) ≠ 0 then ρ m h else PMF.pure none).support at hy
+    rw [dif_pos hm] at hy
+    obtain ⟨σ', ⟨τ, hτ, rfl⟩, rfl⟩ := Inv.replace_supportedIn (hIμ m hm) _ (hρ m hm) y hy
+    refine ⟨_, rfl, Mem.le_union_of_le him ?_⟩
+    rw [𝓘.dom_valid hτ, 𝓐.dom_valid]; exact h𝓐I.symm
+  obtain ⟨T, hT, hTref, hTst⟩ := Distr.Refines.pad hA (U := 𝓘.dom) fun m'' hm'' ↦ by
+    obtain ⟨m, τ, -, hτ, hy⟩ := hR _ ((PMF.mem_support_iff _ _).mpr hm'')
+    cases WithBot.coe_injective hy
+    rw [Mem.dom_union, 𝓘.dom_valid hτ]
+    exact Set.subset_union_left
+  have hTinv : OProp.sure 𝓘.to_MProp T := fun k _ ↦ by
+    obtain ⟨m'', hm'', heq⟩ := hTst k
+    obtain ⟨m, τ, -, hτ, hy⟩ := hR _ ((PMF.mem_support_iff _ _).mpr hm'')
+    cases WithBot.coe_injective hy
+    change 𝓘.prop ((T.state k).restrict 𝓘.dom)
+    rw [heq, Mem.restrict_restrict, Set.inter_self, Mem.restrict_union_left (𝓘.dom_valid hτ)]
+    exact hτ
+  have hPT : Disjoint 𝓟.dom T.dom := by rw [hT]; exact h𝓐I.mono_left Set.subset_union_left
+  have hfT : Disjoint 𝓟fr.dom T.dom := by rw [hT]; exact h𝓐I.mono_left Set.subset_union_right
+  have hwp := hwand T hPT hTinv
+  have hfe : Framed Inv.emp (𝓟 ⊗ T) 𝓟fr ProbSpace.unit ρ' := by
+    refine ⟨fun k _ ↦ ?_, Set.disjoint_union_left.mpr ⟨hf.disj_frame, hfT.symm⟩,
+      Set.disjoint_empty _, Distr.Refines.mono ?_ hTref⟩
+    · change Mem.dom _ = ∅
+      rw [Mem.restrict_dom]; exact Set.inter_empty _
+    · exact ((ProbSpace.product_comm (Set.empty_disjoint _)).trans
+        (ProbSpace.product_unit_le _)).trans (ProbSpace.product_swap_right hfT
+          (Set.disjoint_union_right.mpr ⟨hf.disj_frame, hPT⟩))
+  -- Every run of the action from the interfered distribution re-establishes the invariant
+  have hgood : ∀ x : Mem, (↑x : WithBot Mem) ∈ ρ'.support →
+      ∀ g ∈ (Linearization.Sem.sem a x : ConvexPowerset Mem), ∀ y ∈ PMF.support g,
+        ∃ m'' : Mem, y = m'' ∧ 𝓘.prop (m''.restrict 𝓘.dom) := by
+    intro x hx g hg y hy
+    let Kg : WithBot Mem → Distr Mem := fun z ↦ if z = (x : WithBot Mem) then g else
+      Option.elim z (PMF.pure none) fun x' ↦
+        (Linearization.Sem.sem (⟨a, Inv.emp⟩ : WithInv Act) x' : ConvexPowerset Mem).nonempty.some
+    have hν'' : ρ'.bind Kg ∈ ConvexPowerset.singleton' ρ' >>=
+        𝓛 ((Cmd.act a).withInv Inv.emp).to_pom := by
+      change _ ∈ ConvexPowerset.singleton' ρ' >>=
+        𝓛 (Pom.singleton (Label.act (⟨a, Inv.emp⟩ : WithInv Act)))
+      rw [Pom.lin_act]
+      refine ConvexPowerset.mem_bind.mpr ⟨ρ', ConvexPowerset.self_mem_singleton' _, Kg,
+        fun z _ ↦ ?_, rfl⟩
+      rcases z with _ | x'
+      · exact Set.mem_univ _
+      · change Kg x' ∈ (Linearization.Sem.sem (⟨a, Inv.emp⟩ : WithInv Act) x' : ConvexPowerset Mem)
+        by_cases hxx : (x' : WithBot Mem) = x
+        · simp only [Kg, if_pos hxx]
+          cases WithBot.coe_injective hxx
+          rw [sem_withInv_emp]; exact hg
+        · simp only [Kg, if_neg hxx]
+          exact Set.Nonempty.some_mem _
+    obtain ⟨-, 𝓠, 𝓙', hfQ, -, 𝓠₁, 𝓠₂, hd12, hle12, -, hI2⟩ :=
+      hwp ρ' 𝓟fr ProbSpace.unit hF hfe _ hν''
+    have hyν : y ∈ (ρ'.bind Kg).support := (PMF.mem_support_bind_iff _ _ _).mpr
+      ⟨x, hx, by simp only [Kg, if_pos rfl]; exact hy⟩
+    rcases y with _ | m''
+    · exact absurd hfQ.refines.bot_0 ((PMF.mem_support_iff _ _).mp hyν)
+    · refine ⟨m'', rfl, Distr.Refines.sure hfQ.refines ((OProp.sure 𝓘.to_MProp).mono ?_ hI2)
+        ((PMF.mem_support_iff _ _).mp hyν)⟩
+      exact ((ProbSpace.le_product_right hd12).trans hle12).trans
+        ((ProbSpace.le_product_left _ _).trans (ProbSpace.le_product_left _ _))
+  -- The actual run is a run of the action from the interfered distribution
+  have hν' : μ.bind K ∈ ConvexPowerset.singleton' ρ' >>=
+      𝓛 ((Cmd.act a).withInv Inv.emp).to_pom := by
+    change _ ∈ ConvexPowerset.singleton' ρ' >>=
+      𝓛 (Pom.singleton (Label.act (⟨a, Inv.emp⟩ : WithInv Act)))
+    rw [Pom.lin_act, hKRG]
+    refine ConvexPowerset.mem_bind_of_mixture μ R fun y hy x hx ↦ ?_
+    rcases y with _ | m
+    · exact absurd hf.refines.bot_0 ((PMF.mem_support_iff _ _).mp hy)
+    · have hm : μ (m : WithBot Mem) ≠ 0 := (PMF.mem_support_iff _ _).mp hy
+      change (↑x : WithBot Mem) ∈
+        (if h : μ (m : WithBot Mem) ≠ 0 then ρ m h else PMF.pure none).support at hx
+      rw [dif_pos hm] at hx
+      change (if h : μ (m : WithBot Mem) ≠ 0 then f m h else fun _ ↦ PMF.pure none) x ∈
+        (Linearization.Sem.sem (⟨a, Inv.emp⟩ : WithInv Act) x : ConvexPowerset Mem)
+      rw [dif_pos hm, sem_withInv_emp]
+      exact mem_of_bind_check (hf' m hm x hx) (hgood x (hρsupp m hm _ hx))
+  obtain ⟨hk, 𝓠, 𝓙', hfQ, hdomQ, 𝓠₁, 𝓠₂, hd12, hle12, hψ, hI2⟩ :=
+    hwp ρ' 𝓟fr ProbSpace.unit hF hfe _ hν'
+  -- The interference does not deallocate variables
+  have hμρ : Distr.Keeps μ ρ' := fun D hD m' hm' ↦ by
+    obtain ⟨m, τ, hm, -, hy⟩ := hR _ ((PMF.mem_support_iff _ _).mpr hm')
+    cases WithBot.coe_injective hy
+    rw [Mem.dom_union]; exact (hD m hm).trans Set.subset_union_right
+  -- The invariant goes back to the invariant's space
+  have h1 : 𝓠₁.dom ⊆ 𝓠.dom := ProbSpace.dom_mono ((ProbSpace.le_product_left _ _).trans hle12)
+  have h2 : 𝓠₂.dom ⊆ 𝓠.dom :=
+    ProbSpace.dom_mono ((ProbSpace.le_product_right hd12).trans hle12)
+  have hQf : Disjoint 𝓠.dom 𝓟fr.dom := hfQ.disj_frame
+  have hQfJ : Disjoint (𝓠.dom ∪ 𝓟fr.dom) 𝓙'.dom := hfQ.disj_inv
+  have hI2dom : 𝓘.dom ⊆ 𝓠₂.dom := (OProp.sure_forget 𝓘.footprint hI2).1
+  refine ⟨Distr.Keeps.trans hμρ hk, 𝓠₁, 𝓠₂ ⊗ 𝓙',
+    ⟨(OProp.sure _).mono (ProbSpace.le_product_left _ _) hI2, hQf.mono_left h1, ?_, ?_⟩, ?_, hψ⟩
+  · change Disjoint (𝓠₁.dom ∪ 𝓟fr.dom) (𝓠₂.dom ∪ 𝓙'.dom)
+    exact Set.disjoint_union_left.mpr
+      ⟨Set.disjoint_union_right.mpr ⟨hd12, hQfJ.mono_left (h1.trans Set.subset_union_left)⟩,
+        Set.disjoint_union_right.mpr ⟨(hQf.mono_left h2).symm,
+          hQfJ.mono_left Set.subset_union_right⟩⟩
+  · refine Distr.Refines.mono ((ProbSpace.product_assoc' _ _ _).trans
+      ((ProbSpace.product_mono_left (ProbSpace.product_swap_right (hQf.mono_left h2)
+        (Set.disjoint_union_right.mpr ⟨hd12, hQf.mono_left h1⟩))
+        (hQfJ.mono_left (Set.union_subset_union_left _ (Set.union_subset h1 h2)))).trans
+      (ProbSpace.product_mono_left (ProbSpace.product_mono_left hle12 hQf) hQfJ))) hfQ.refines
+  · intro y hy
+    rcases hdomQ (h1 hy) with h | h
+    · exact h
+    · rw [hT] at h
+      exact absurd (hI2dom h) (Set.disjoint_left.mp hd12 hy)
 
 /-- **The parallel composition rule.**  If the postconditions `ψ₁` and `ψ₂` are precise, then
 the weakest preconditions of two threads can be combined with the separating conjunction.
