@@ -517,9 +517,7 @@ lemma wp_loop {L : Finset ℚ} (eps : ℚ)
   have hpost : loopInv ⟨0, le_refl 0, zero_le_one⟩ = phi0 := by simp [loopInv]
   have hprec : (loopInv ⟨0, le_refl 0, zero_le_one⟩).Precise := by
     rw [hpost]; exact phi0_precise
-  have hrule := wp_bounded_rank (𝓘 := inv L)
-      (F := fun 𝓟fr ↦ ∀ E, 𝓟fr.mspace.MeasurableSet' E → 𝓟fr.μ E = 0 ∨ 𝓟fr.μ E = 1)
-      (c := body) (zero_le_one) (φ := loopInv) (b := eqTest ($"x") ($"y"))
+  have hrule := wp_bounded_rank (𝓘 := inv L) (c := body) (zero_le_one) (φ := loopInv) (b := eqTest ($"x") ($"y"))
       (rank := eqTest ($"x") ($"y")) hq loopInv_rank hexit hloopg hprec
   rw [hpost] at hrule
   refine Iris.BI.Entails.trans Iris.BI.emp_sep.2

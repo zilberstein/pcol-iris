@@ -410,8 +410,9 @@ held by the expression `rank`; the loop exits exactly at rank `ℓ`.  If every i
 started at a rank `r > ℓ` decreases the rank with probability at least `p > 0` (and otherwise
 ends at an arbitrary rank), then the loop terminates almost surely at rank `ℓ`.
 
-As in the paper, the rule is stated for any class of frames `F`; the strong triple follows
-from the weak one with `wp_strengthen`, since the postcondition is precise.  The paper
+As in the paper, the rule is stated for weak triples; the strong triple follows with
+`wp_strengthen`, since the postcondition is precise (and a strong premise implies the weak
+one, `wp_weaken`).  The paper
 requires the rank to stay at least `N` in the second branch; allowing any rank there makes
 the rule stronger and is still sound (the loop exits with probability at least `p ^ (h - ℓ)`
 from any rank). -/
@@ -422,12 +423,12 @@ lemma wp_bounded_rank {ℓ h : ℕ} (hle : ℓ ≤ h) {φ : Set.Icc ℓ h → OP
     (hloop : ∀ {r}, r.val > ℓ → φ r ⊢ ⌈b == Expr.literal 1⌉)
     (hprec : (φ ⟨ℓ, le_refl _, hle⟩).Precise) :
     (∀ r, ⌜r.val > ℓ⌝ -∗ φ r -∗
-      wp_base 𝓘 F c
+      wp_weak 𝓘 c
         (OProp.oplusGe p
           (& fun (s : Set.Ico ℓ r) ↦
             φ ⟨s.val, s.property.1, (le_of_lt s.property.2).trans r.property.2⟩)
           (& φ)))
-      ⊢ & φ -∗ wp_base 𝓘 F (while( b ){ c }) (φ ⟨ℓ, le_refl _, hle⟩) := sorry
+      ⊢ & φ -∗ wp_weak 𝓘 (while( b ){ c }) (φ ⟨ℓ, le_refl _, hle⟩) := sorry
 
 /-- CONCURRNCY RULES -/
 
