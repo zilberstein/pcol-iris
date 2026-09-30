@@ -531,6 +531,7 @@ lemma wp_body_branch {L : Finset ℚ} {F : ProbSpace → Prop} (eps X : ℚ)
             (bodyPost' (2 * eps * (1 - eps))) ∗ ⌈(inv L).to_MProp⌉) := by
   iintro ⟨hp, hpp, hx, hy⟩
   iapply wp_assign_pres "p'" ($"p") _ X (by intro σ w; simp [Expr.var, Mem.extend])
+    (Expr.var_mono _)
   isplitl [hp hpp]
   · iapply sure_and; isplitl [hp]
     · iapply hp

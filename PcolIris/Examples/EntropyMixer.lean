@@ -248,6 +248,7 @@ lemma wp_x1_branch {F : ProbSpace → Prop} (v : Val) (hv : v = 0 ∨ v = 1) :
           ⌈𝓘.to_MProp⌉) := by
   iintro ⟨hy, hx₁, hx₂, hz⟩
   iapply wp_assign_pres "x₁" ($"y") _ v (by intro σ w; simp [Expr.var, Mem.extend])
+    (Expr.var_mono _)
   isplitl [hy hx₁]
   · iapply sure_and; isplitl [hy]
     · iapply hy

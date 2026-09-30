@@ -70,17 +70,18 @@ lemma wp_if_true {b : Expr} {c₁ c₂ : Cmd Act} {φ ψ : OProp} :
   intro 𝓟 ⟨htrue, hwp⟩ μ 𝓟fr 𝓙 hF href ν hν; rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_if_stmt] at hν
   sorry
 
-/-- The `Assign` rule.  The expression must be local (`Expr.Local`): its value is known in
-the precondition, and must not be changed by interference on the invariant's variables. -/
-lemma wp_assign (x : Var) (e : Expr) (ψ : OProp) (v : Val) (he : e.Local) :
-    ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗ ((⌈$ x == Expr.literal v ∧ own e⌉) -∗ ψ) ⊢
-      wp_base 𝓘 F (x ::= e) ψ := by
-  rintro 𝓟 ⟨𝓟₁, 𝓟₂, hd, hle, hpre, hwand⟩ μ 𝓟fr 𝓙 _ hf ν hν
-  have hf₁ := hf.mono hle
+/-- A run of an assignment `x := e`, from a distribution framed with `𝓟₁ ⊗ 𝓟₂` where `e` is
+known to have the value `v` in `𝓟₁`, is framed with `𝓟₁` updated by `x := v`, and `𝓟₂`. -/
+lemma assign_run {x : Var} {e : Expr} {v : Val} (he : e.Mono) {𝓟₁ 𝓟₂ 𝓟fr 𝓙 : ProbSpace}
+    {μ ν : Distr Mem} (hpre : ⌈e == Expr.literal v ∧ own ($ x)⌉ 𝓟₁)
+    (hf₁ : Framed 𝓘 (𝓟₁ ⊗ 𝓟₂) 𝓟fr 𝓙 μ)
+    (hν : ν ∈ ConvexPowerset.singleton' μ >>= 𝓛 ((x ::= e).withInv 𝓘).to_pom) :
+    ∃ hx : x ∈ 𝓟₁.dom, Distr.Keeps μ ν ∧
+      ∃ T, Framed 𝓘 (𝓟₁.assign x v hx ⊗ 𝓟₂) 𝓟fr T ν := by
   change ν ∈ ConvexPowerset.singleton' μ >>=
     𝓛 (Pom.singleton (Label.act (⟨Act.assign x e, 𝓘⟩ : WithInv Act))) at hν
   rw [Pom.lin_act] at hν
-  obtain ⟨K, rfl, hK⟩ := run_act hf.refines.bot_0 hν
+  obtain ⟨K, rfl, hK⟩ := run_act hf₁.refines.bot_0 hν
   -- The program's part of the space, with the frame
   set 𝓐 := (𝓟₁ ⊗ 𝓟₂) ⊗ 𝓟fr with h𝓐def
   have h𝓐 : 𝓐 ≼ μ := Distr.Refines.mono (ProbSpace.le_product_left _ _) hf₁.refines
@@ -113,7 +114,7 @@ lemma wp_assign (x : Var) (e : Expr) (ψ : OProp) (v : Val) (he : e.Local) :
     · have hτd : τ.dom = 𝓘.dom := 𝓘.dom_valid hτ
       have hle' : 𝓐.state i ≤ (τ ⊎ m) := Mem.le_union_of_le him
         (by rw [hτd, 𝓐.dom_valid]; exact h𝓐I.symm)
-      have hev : e (τ ⊎ m) = some v := he.mono (hσ'.trans hle') hσ'e
+      have hev : e (τ ⊎ m) = some v := he (hσ'.trans hle') hσ'e
       refine (sem_assign_supportedIn hev).mono (Set.singleton_subset_iff.mpr ⟨⟨τ, hτ, rfl⟩, ?_⟩)
       rw [Mem.restrict_extend_of_notMem v hxI, Mem.restrict_union_left hτd]
       exact hτ
@@ -124,11 +125,11 @@ lemma wp_assign (x : Var) (e : Expr) (ψ : OProp) (v : Val) (he : e.Local) :
     obtain ⟨y, hy, hm''y⟩ :=
       (PMF.mem_support_bind_iff _ _ _).mp ((PMF.mem_support_iff _ _).mpr hm'')
     rcases y with _ | m
-    · exact absurd hf.refines.bot_0 ((PMF.mem_support_iff _ _).mp hy)
+    · exact absurd hf₁.refines.bot_0 ((PMF.mem_support_iff _ _).mp hy)
     · have hm : μ (m : WithBot Mem) ≠ 0 := (PMF.mem_support_iff _ _).mp hy
       obtain ⟨τ, hτ, h⟩ := hKm m hm _ hm''y
       exact ⟨m, τ, hm, hτ, Option.some.inj h⟩
-  refine ⟨fun D hD m'' hm'' ↦ ?_, ?_⟩
+  refine ⟨hx, fun D hD m'' hm'' ↦ ?_, ?_⟩
   · obtain ⟨m, τ, hm, -, rfl⟩ := hfin m'' hm''
     rw [Mem.dom_extend, Mem.dom_union]
     exact (hD m hm).trans (Set.subset_union_right.trans (Set.subset_insert _ _))
@@ -156,16 +157,24 @@ lemma wp_assign (x : Var) (e : Expr) (ψ : OProp) (v : Val) (he : e.Local) :
     rw [heq, Mem.restrict_restrict, Set.inter_self, Mem.restrict_extend_of_notMem v hxI,
       Mem.restrict_union_left (𝓘.dom_valid hτ)]
     exact hτ
-  -- The postcondition
+  refine ⟨T, hTinv, hf₁.disj_frame, ?_, hTref⟩
+  rw [hT]; exact h𝓐I
+
+/-- The `Assign` rule.  The expression must be local (`Expr.Local`): its value is known in
+the precondition, and must not be changed by interference on the invariant's variables. -/
+lemma wp_assign (x : Var) (e : Expr) (ψ : OProp) (v : Val) (he : e.Local) :
+    ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗ ((⌈$ x == Expr.literal v ∧ own e⌉) -∗ ψ) ⊢
+      wp_base 𝓘 F (x ::= e) ψ := by
+  rintro 𝓟 ⟨𝓟₁, 𝓟₂, hd, hle, hpre, hwand⟩ μ 𝓟fr 𝓙 _ hf ν hν
+  obtain ⟨hx, hk, T, hfT⟩ := assign_run he.mono hpre (hf.mono hle) hν
+  set 𝓡 := 𝓟₁.assign x v hx
   have h𝓡 : OProp.sure iprop($ x == Expr.literal v ∧ own e) 𝓡 := by
     intro k hk
     obtain ⟨σ', hσ', hσ'd, -⟩ := (hpre hk).1
     refine ⟨Expr.var_equals_literal_iff.mpr (Mem.extend_apply_self _ _ _), ?_⟩
     exact ⟨σ'.extend x v, Mem.extend_mono hσ' x v, he.extend x v hσ'd⟩
-  refine ⟨𝓡 ⊗ 𝓟₂, T, ⟨hTinv, hf₁.disj_frame, ?_, hTref⟩,
-    (show 𝓟₁.dom ∪ 𝓟₂.dom ⊆ 𝓟.dom from ProbSpace.dom_mono hle),
+  exact ⟨hk, 𝓡 ⊗ 𝓟₂, T, hfT, (show 𝓟₁.dom ∪ 𝓟₂.dom ⊆ 𝓟.dom from ProbSpace.dom_mono hle),
     ψ.mono (ProbSpace.product_comm hd) (hwand 𝓡 hd.symm h𝓡)⟩
-  rw [hT]; exact h𝓐I
 
 lemma wp_bern (x : Var) (e : Expr) (v : Val) {ψ : OProp} :
     ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗ (($ x ~ Bern v ∧ ⌈own e⌉) -∗ ψ) ⊢
@@ -361,10 +370,37 @@ After the assignment both `x` and `e` hold the value `v` deterministically, and 
 disjoint parts of the memory, so the two certainties are returned as separate resources.
 -/
 lemma wp_assign_pres {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) (ψ : OProp) (v : Val)
-    (he : ∀ (σ : Mem) (w : Val), e (σ.extend x w) = e σ) :
+    (he : ∀ (σ : Mem) (w : Val), e (σ.extend x w) = e σ) (hmono : e.Mono) :
     ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗
       ((iprop(⌈$ x == Expr.literal v⌉ ∗ ⌈e == Expr.literal v⌉)) -∗ ψ) ⊢
-    wp_base 𝓘 F (x ::= e) ψ := sorry
+    wp_base 𝓘 F (x ::= e) ψ := by
+  rintro 𝓟 ⟨𝓟₁, 𝓟₂, hd, hle, hpre, hwand⟩ μ 𝓟fr 𝓙 _ hf ν hν
+  obtain ⟨hx, hk, T, hfT⟩ := assign_run hmono hpre (hf.mono hle) hν
+  set 𝓡 := 𝓟₁.assign x v hx
+  have hx𝓡 : {x} ⊆ 𝓡.dom := Set.singleton_subset_iff.mpr hx
+  have hD𝓡 : 𝓡.dom \ {x} ⊆ 𝓡.dom := Set.sdiff_subset
+  -- After the assignment, `x` and `e` are both known, on disjoint variables
+  have h𝓡 : iprop(⌈$ x == Expr.literal v⌉ ∗ ⌈e == Expr.literal v⌉) 𝓡 := by
+    refine ⟨ProbSpace.forget 𝓡 {x} hx𝓡, ProbSpace.forget 𝓡 (𝓡.dom \ {x}) hD𝓡,
+      Set.disjoint_sdiff_right, ProbSpace.product_forget_le (ProbSpace.forget_le _ _) _,
+      fun k _ ↦ ?_, fun k _ ↦ ?_⟩
+    · obtain ⟨k', -, heq⟩ := ProbSpace.forget_state_restrict 𝓡 hx𝓡 k
+      change ($ x == Expr.literal v) ((ProbSpace.forget 𝓡 {x} hx𝓡).state k)
+      rw [heq, Expr.var_equals_literal_iff, Mem.restrict_apply_of_mem _ (Set.mem_singleton x)]
+      exact Mem.extend_apply_self _ _ _
+    · obtain ⟨k', hk', heq⟩ := ProbSpace.forget_state_restrict 𝓡 hD𝓡 k
+      change (e == Expr.literal v) ((ProbSpace.forget 𝓡 (𝓡.dom \ {x}) hD𝓡).state k)
+      obtain ⟨σ', hσ', -, hσ'e⟩ := (hpre hk').1
+      have hs : 𝓡.state k' = (𝓟₁.state k').extend x v := rfl
+      have hval : e (𝓡.state k') = some v := by rw [hs, he]; exact hmono hσ' hσ'e
+      have hrestr : e ((𝓡.state k').restrict (𝓡.dom \ {x})) = some v := by
+        rw [← he _ v, ← 𝓡.dom_valid k',
+          Mem.extend_restrict_sdiff (by rw [hs]; exact Mem.extend_apply_self _ _ _)]
+        exact hval
+      rw [heq]
+      exact MProp.upClose_of ⟨by rw [hrestr]; rfl, hrestr⟩
+  exact ⟨hk, 𝓡 ⊗ 𝓟₂, T, hfT, (show 𝓟₁.dom ∪ 𝓟₂.dom ⊆ 𝓟.dom from ProbSpace.dom_mono hle),
+    ψ.mono (ProbSpace.product_comm hd) (hwand 𝓡 hd.symm h𝓡)⟩
 
 /-- **Elimination of a nondeterministic choice in the precondition.**
 
