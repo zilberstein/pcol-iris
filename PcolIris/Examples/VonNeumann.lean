@@ -269,7 +269,7 @@ nondeterministic mixture.  We therefore introduce convexity and derive the corre
 rule from `wp_nsplit`. -/
 
 /-- An assertion is convex when it is closed under probabilistic mixtures. -/
-def Convex (ψ : OProp) : Prop := ∀ {ι : Type} (ξ : PMF ι), (⨁[ξ] (fun (_ : ι) => ψ)) ⊢ ψ
+def Convex (ψ : OProp) : Prop := ∀ {ι : Type} [Countable ι] (ξ : PMF ι), (⨁[ξ] (fun (_ : ι) => ψ)) ⊢ ψ
 
 /-- A precise assertion is convex. -/
 lemma Convex.of_precise {ψ : OProp} (h : ψ.Precise) : Convex ψ := fun _ ↦ OProp.oplus_collapse h
@@ -286,14 +286,14 @@ lemma Convex.sep_precise {φ ψ : OProp} (hφ : Convex φ) (hψ : ψ.Precise) :
     (Iris.BI.sep_mono_left (hφ ξ))
 
 /-- A nondeterministic choice between copies of a convex assertion collapses. -/
-lemma nondet_collapse_convex {ι : Type} {ψ : OProp} (h : Convex ψ) :
+lemma nondet_collapse_convex {ι : Type} [Countable ι] {ψ : OProp} (h : Convex ψ) :
     OProp.nondet (fun (_ : ι) ↦ ψ) ⊢ ψ := by
   rintro P ⟨ξ, hξ⟩
   exact h ξ P hξ
 
 /-- **The `NSplit2` rule**: a nondeterministic choice in the precondition can be analysed
 branch by branch, provided the postcondition is convex. -/
-lemma wp_nsplit2 {ι : Type} {ψ : OProp} {J : Inv} {F : ProbSpace → Prop} {c : Cmd Act}
+lemma wp_nsplit2 {ι : Type} [Countable ι] {ψ : OProp} {J : Inv} {F : ProbSpace → Prop} {c : Cmd Act}
     (h : Convex ψ) : OProp.nondet (fun (_ : ι) ↦ wp_base J F c ψ) ⊢ wp_base J F c ψ :=
   Iris.BI.Entails.trans wp_nsplit (wp_conseq (nondet_collapse_convex h))
 
@@ -340,14 +340,14 @@ same defect that the development itself documents for `sum_prod_distribute`. -/
 /-- **Introduction of a nondeterministic choice**: every branch of a nondeterministic choice
 entails the choice itself.  (In the semantics of the paper `&` is a union of sets of
 probability spaces, so this is immediate.) -/
-lemma nondet_intro {iota : Type} {phi : iota → OProp} (i : iota) : phi i ⊢ OProp.nondet phi :=
+lemma nondet_intro {iota : Type} [Countable iota] {phi : iota → OProp} (i : iota) : phi i ⊢ OProp.nondet phi :=
   sorry
 
 /-- Nondeterministic choices are convex: a mixture of unions of mixtures is again one. -/
-lemma Convex.nondet {iota : Type} {phi : iota → OProp} : Convex (OProp.nondet phi) := sorry
+lemma Convex.nondet {iota : Type} [Countable iota] {phi : iota → OProp} : Convex (OProp.nondet phi) := sorry
 
 /-- A probabilistic mixture of convex assertions is convex. -/
-lemma Convex.oplus {iota : Type} {xi : PMF iota} {phi : iota → OProp}
+lemma Convex.oplus {iota : Type} [Countable iota] {xi : PMF iota} {phi : iota → OProp}
     (h : ∀ i, Convex (phi i)) : Convex (⨁[xi] phi) := sorry
 
 /-- **Weakening of the probability of a two-branch mixture**, i.e. the passage from the

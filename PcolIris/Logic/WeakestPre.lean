@@ -150,7 +150,7 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
 
 /- STRUCTURAL RULES -/
 
-variable {ι : Type} {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ξ : PMF ι} {φ ψ : OProp}
+variable {ι : Type} [Countable ι] {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ξ : PMF ι} {φ ψ : OProp}
 
 lemma wp_conseq (h : φ ⊢ ψ) : wp_base 𝓘 F c φ ⊢ wp_base 𝓘 F c ψ := by
   intro 𝓟 hc μ 𝓟fr 𝓙 hF hf ν hν
@@ -202,11 +202,11 @@ lemma wp_assign_pres {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) 
 
 If the postcondition is precise, then it is enough to establish the weakest precondition in
 each branch of a nondeterministic choice. -/
-lemma wp_nondet {κ : Type} {ψ : OProp} (h : ψ.Precise) :
+lemma wp_nondet {κ : Type} [Countable κ] {ψ : OProp} (h : ψ.Precise) :
     OProp.nondet (fun (_ : κ) => wp_base 𝓘 F c ψ) ⊢ wp_base 𝓘 F c ψ :=
   Iris.BI.Entails.trans wp_nsplit (wp_conseq (OProp.nondet_collapse h))
 
-lemma wp_exists {ι : Type} {P : ι → MProp} :
+lemma wp_exists {ι : Type} [Countable ι] {P : ι → MProp} :
     ((& fun i ↦ ⌈P i⌉) -∗ wp_base 𝓘 F c ψ)
     ⊢ ⌈ iprop( ∃ i, P i ) ⌉ -∗ wp_weak 𝓘 c ψ := by
   sorry

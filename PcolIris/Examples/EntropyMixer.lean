@@ -252,7 +252,7 @@ abbrev Bit : Set Val := {0, 1}
 /-- A nondeterministic choice between (identical) postconditions of the shape
 "weakest precondition, and the invariant holds" can be collapsed: the invariant is precise,
 and the postcondition `ψ` of the weakest precondition is precise as well. -/
-lemma collapse_post {F : ProbSpace → Prop} {ι : Type} {c : Cmd Act} :
+lemma collapse_post {F : ProbSpace → Prop} {ι : Type} [Countable ι] {c : Cmd Act} :
     OProp.nondet (fun (_ : ι) => iprop(wp_base 𝓘 F c ψ ∗ ⌈𝓘.to_MProp⌉)) ⊢
       iprop(wp_base 𝓘 F c ψ ∗ ⌈𝓘.to_MProp⌉) :=
   Iris.BI.Entails.trans (OProp.nondet_distrib' _ _ (Precise.sure (Inv.footprint 𝓘) 𝓘.dom_finite))

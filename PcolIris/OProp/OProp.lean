@@ -227,7 +227,10 @@ models of `φ` are exactly the spaces above some space `𝓟`. -/
 def Precise (φ : OProp) : Prop :=
   ∀ 𝓠, φ 𝓠 → ∃ 𝓟 : ProbSpace, ∀ 𝓠', 𝓟 ≤ 𝓠' ↔ φ 𝓠'
 
-def oplus {ι : Type} (ξ : PMF ι) (φ : ι → OProp) : OProp where
+/-- The outcome conjunction `⨁[ξ] φ`: the space is (at least) a `ξ`-weighted sum of spaces
+satisfying the `φ v`.  The index type is countable, so that the summands can always be given
+disjoint sets of outcomes. -/
+def oplus {ι : Type} [Countable ι] (ξ : PMF ι) (φ : ι → OProp) : OProp where
   prop 𝓟 := ∃ 𝓠 V h hd,
     ProbSpace.sum ξ 𝓠 V h hd ≤ 𝓟 ∧
     ∀ v ∈ ξ.support, φ v (𝓠 v)
@@ -240,7 +243,7 @@ def distributed_as (e : Expr) (ξ : PMF Val) : OProp :=
 
 infixl:70 " ~ " => distributed_as
 
-def nondet {ι : Type} (φ : ι → OProp) : OProp where
+def nondet {ι : Type} [Countable ι] (φ : ι → OProp) : OProp where
   prop 𝓟 := ∃ ξ : PMF ι, oplus ξ φ 𝓟
   upcl := fun hle ⟨ξ, h⟩ ↦ ⟨ξ, (oplus ξ φ).mono hle h⟩
 

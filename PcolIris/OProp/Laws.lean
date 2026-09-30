@@ -89,7 +89,7 @@ lemma sure_sep {P Q : MProp} :
   · exact sure_sep_intro
 
 /-- A frame can be pushed into the branches of an outcome conjunction. -/
-lemma oplus_distrib {ι : Type} (ξ : PMF ι) (φ : ι → OProp) (ψ : OProp) :
+lemma oplus_distrib {ι : Type} [Countable ι] (ξ : PMF ι) (φ : ι → OProp) (ψ : OProp) :
     (⨁[ ξ ] φ) ∗ ψ ⊢ ⨁[ ξ ] fun v ↦ iprop(φ v ∗ ψ) := by
   rintro 𝓟 ⟨m₁, m₂, hd, hle, ⟨𝓠, V, hdsj, hdom, hsum, hφ⟩, hψ⟩
   have hV : V ⊆ m₁.dom := ProbSpace.dom_mono hsum
@@ -99,7 +99,7 @@ lemma oplus_distrib {ι : Type} (ξ : PMF ι) (φ : ι → OProp) (ψ : OProp) :
       ((ProbSpace.product_mono_left hsum hd).trans hle)
   · exact ⟨𝓠 v, m₂, (hdom v).symm ▸ hd.mono_left hV, le_refl _, hφ v hv, hψ⟩
 
-lemma oplus_distrib' {ι : Type} (ξ : PMF ι) (φ : ι → OProp) (ψ : OProp) (h : ψ.Precise) :
+lemma oplus_distrib' {ι : Type} [Countable ι] (ξ : PMF ι) (φ : ι → OProp) (ψ : OProp) (h : ψ.Precise) :
     (⨁[ ξ ] fun v ↦ iprop(φ v ∗ ψ)) ⊢ (⨁[ ξ ] φ) ∗ ψ := by
   sorry
 
@@ -110,24 +110,24 @@ lemma oplus_weaken {ξ : PMF Val} {φ ψ : Val → OProp} (h : ∀ v ∈ ξ.supp
   intro v hv; exact h v hv (𝓠 v) <| hφ v hv
 
 /-- `oplus_weaken`, for an arbitrary index type. -/
-lemma oplus_weaken' {ι : Type} {ξ : PMF ι} {φ ψ : ι → OProp}
+lemma oplus_weaken' {ι : Type} [Countable ι] {ξ : PMF ι} {φ ψ : ι → OProp}
     (h : ∀ v ∈ ξ.support, φ v ⊢ ψ v) : (⨁[ξ] φ) ⊢ ⨁[ξ] ψ := by
   intro 𝓟 ⟨𝓠, V, hdsj, hdom, hsum, hφ⟩
   exact ⟨𝓠, V, hdsj, hdom, hsum, fun v hv ↦ h v hv (𝓠 v) (hφ v hv)⟩
 
 /-- Nondeterministic choice is monotone. -/
-lemma nondet_weaken {ι : Type} {φ ψ : ι → OProp} (h : ∀ i, φ i ⊢ ψ i) : (& φ) ⊢ & ψ := by
+lemma nondet_weaken {ι : Type} [Countable ι] {φ ψ : ι → OProp} (h : ∀ i, φ i ⊢ ψ i) : (& φ) ⊢ & ψ := by
   rintro 𝓟 ⟨ξ, hξ⟩
   exact ⟨ξ, oplus_weaken' (fun v _ ↦ h v) 𝓟 hξ⟩
 
 /-- A frame can be pushed into the branches of a nondeterministic choice. -/
-lemma nondet_distrib {ι : Type} (φ : ι → OProp) (ψ : OProp) :
+lemma nondet_distrib {ι : Type} [Countable ι] (φ : ι → OProp) (ψ : OProp) :
     iprop((& φ) ∗ ψ) ⊢ & fun v ↦ iprop(φ v ∗ ψ) := by
   rintro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, ⟨ξ, hξ⟩, hψ⟩
   exact ⟨ξ, oplus_distrib ξ φ ψ 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, hξ, hψ⟩⟩
 
 /-- A precise frame can be pulled out of the branches of a nondeterministic choice. -/
-lemma nondet_distrib' {ι : Type} (φ : ι → OProp) (ψ : OProp) (h : ψ.Precise) :
+lemma nondet_distrib' {ι : Type} [Countable ι] (φ : ι → OProp) (ψ : OProp) (h : ψ.Precise) :
     (& fun v ↦ iprop(φ v ∗ ψ)) ⊢ iprop((& φ) ∗ ψ) := by
   rintro 𝓟 ⟨ξ, hξ⟩
   obtain ⟨𝓟₁, 𝓟₂, hdisj, hle, h₁, h₂⟩ := oplus_distrib' ξ φ ψ h 𝓟 hξ
@@ -140,7 +140,7 @@ probabilistic sum satisfies the precise assertion `ψ`, then so does the sum its
 This is the special case of `oplus_distrib'` where the family is the unit of the separating
 conjunction.
 -/
-lemma oplus_collapse {ι : Type} {ξ : PMF ι} {ψ : OProp} (h : ψ.Precise) :
+lemma oplus_collapse {ι : Type} [Countable ι] {ξ : PMF ι} {ψ : OProp} (h : ψ.Precise) :
     (⨁[ξ] fun _ ↦ ψ) ⊢ ψ := by
   refine Iris.BI.Entails.trans (oplus_weaken' (φ := fun _ ↦ ψ)
     (ψ := fun _ ↦ iprop(Iris.BI.BIBase.emp ∗ ψ)) (fun _ _ ↦ Iris.BI.emp_sep.2)) ?_
@@ -148,7 +148,7 @@ lemma oplus_collapse {ι : Type} {ξ : PMF ι} {ψ : OProp} (h : ψ.Precise) :
     Iris.BI.sep_elim_right
 
 /-- A precise assertion is closed under nondeterministic mixtures. -/
-lemma nondet_collapse {ι : Type} {ψ : OProp} (h : ψ.Precise) : nondet (fun (_ : ι) => ψ) ⊢ ψ := by
+lemma nondet_collapse {ι : Type} [Countable ι] {ψ : OProp} (h : ψ.Precise) : nondet (fun (_ : ι) => ψ) ⊢ ψ := by
   rintro 𝓟 ⟨ξ, hξ⟩
   exact oplus_collapse h 𝓟 hξ
 
@@ -156,7 +156,7 @@ lemma nondet_collapse {ι : Type} {ψ : OProp} (h : ψ.Precise) : nondet (fun (_
 Reindexing a probabilistic sum along a bijection of the index type that preserves the
 distribution.
 -/
-lemma oplus_reindex {ι : Type} {ξ : PMF ι} (e : ι ≃ ι) (hξ : ∀ i, ξ (e i) = ξ i)
+lemma oplus_reindex {ι : Type} [Countable ι] {ξ : PMF ι} (e : ι ≃ ι) (hξ : ∀ i, ξ (e i) = ξ i)
     (φ : ι → OProp) : (⨁[ξ] fun v ↦ φ (e v)) ⊢ ⨁[ξ] φ := by
   rintro 𝓟 ⟨𝓠, V, hdsj, hdom, hsum, hφ⟩
   refine ⟨fun w ↦ 𝓠 (e.symm w), V, ?_, fun i ↦ hdom _, ?_, ?_⟩
@@ -285,7 +285,7 @@ lemma sep {φ ψ : OProp} (hφ : φ.Precise) (hψ : ψ.Precise) : iprop(φ ∗ �
     exact (ProbSpace.product_mono ((hP₁ n₁).mpr hn₁) ((hP₂ n₂).mpr hn₂)
       (hdn.mono_right (ProbSpace.dom_mono ((hP₂ n₂).mpr hn₂)))).trans hle
 
-lemma oplus {ι : Type} {ξ : PMF ι} {φ : ι → OProp} (h : ∀ v ∈ ξ.support, (φ v).Precise) :
+lemma oplus {ι : Type} [Countable ι] {ξ : PMF ι} {φ : ι → OProp} (h : ∀ v ∈ ξ.support, (φ v).Precise) :
     (⨁[ξ] φ).Precise := by sorry
 
 end Precise
