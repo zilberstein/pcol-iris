@@ -22,9 +22,12 @@ def wp_base (𝓘 : Inv) (F : ProbSpace → Prop) (c : Cmd Act) (ψ : OProp) : O
       -- Take any `ν` that results from running the program
       ∀ ν ∈ ConvexPowerset.singleton' μ >>= 𝓛 (c.withInv 𝓘).to_pom,
       -- Then `ν` refines some probability space `𝓠`, which satisfies the postcondition `ψ`,
-      -- together with the same frame and a space satisfying the invariant
-        ∃ 𝓠 𝓙', Framed 𝓘 𝓠 𝓟fr 𝓙' ν ∧ ψ 𝓠
-  upcl := fun hle h μ 𝓟fr 𝓙 hF hf ν hν ↦ h μ 𝓟fr 𝓙 hF (hf.mono hle) ν hν
+      -- together with the same frame and a space satisfying the invariant.  The program does
+      -- not acquire variables: `𝓠` owns no more variables than `𝓟`.
+        ∃ 𝓠 𝓙', Framed 𝓘 𝓠 𝓟fr 𝓙' ν ∧ 𝓠.dom ⊆ 𝓟.dom ∧ ψ 𝓠
+  upcl := fun hle h μ 𝓟fr 𝓙 hF hf ν hν ↦
+    let ⟨𝓠, 𝓙', hf', hdom, hψ⟩ := h μ 𝓟fr 𝓙 hF (hf.mono hle) ν hν
+    ⟨𝓠, 𝓙', hf', hdom.trans (ProbSpace.dom_mono hle), hψ⟩
 
 /-- The standard "strong" wp allows any frame -/
 def wp (𝓘 : Inv) : Cmd Act → OProp → OProp := wp_base 𝓘 (fun _ ↦ True)
@@ -44,7 +47,7 @@ variable {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act}
 lemma wp_skip (φ : OProp) :
     φ ⊢ wp_base 𝓘 F Cmd.skip φ := by
   intro 𝓟 hφ μ 𝓟fr 𝓙 _ hf ν hν
-  refine ⟨𝓟, 𝓙, ?_, hφ⟩
+  refine ⟨𝓟, 𝓙, ?_, subset_rfl, hφ⟩
   rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_skip, bind_pure] at hν
   have hle : μ ≤ ν := by
     have : ν ∈ (ConvexPowerset.singleton' μ).set := hν
@@ -55,9 +58,10 @@ lemma wp_seq {c₁ c₂ : Cmd Act} {ψ : OProp} :
     wp_base 𝓘 F c₁ (wp_base 𝓘 F c₂ ψ) ⊢ wp_base 𝓘 F (Cmd.seq c₁ c₂) ψ := by
   intro 𝓟 h μ 𝓟fr 𝓙 hF href ν; rw [Cmd.withInv, Cmd.to_pom, Pom.lin_seq, ← bind_assoc]
   intro hν; rcases ConvexPowerset.mem_bind.mp hν with ⟨ξ, hξ, f, hf, rfl⟩
-  have ⟨𝓡, 𝓙', href', h'⟩ := h μ 𝓟fr 𝓙 hF href ξ hξ
-  refine h' ξ 𝓟fr 𝓙' hF href' _ ?_
-  exact ConvexPowerset.mem_bind.mpr ⟨ξ, ConvexPowerset.self_mem_singleton' _, f, hf, rfl⟩
+  have ⟨𝓡, 𝓙', href', hdom, h'⟩ := h μ 𝓟fr 𝓙 hF href ξ hξ
+  obtain ⟨𝓠, 𝓙'', hf'', hdom', hψ⟩ := h' ξ 𝓟fr 𝓙' hF href' _
+    (ConvexPowerset.mem_bind.mpr ⟨ξ, ConvexPowerset.self_mem_singleton' _, f, hf, rfl⟩)
+  exact ⟨𝓠, 𝓙'', hf'', hdom'.trans hdom, hψ⟩
 
 lemma wp_if_true {b : Expr} {c₁ c₂ : Cmd Act} {φ ψ : OProp} :
      ⌈b == Expr.literal 1⌉ ∧ wp_base 𝓘 F c₁ ψ ⊢ wp_base 𝓘 F (Cmd.if_stmt b c₁ c₂) ψ := by
@@ -122,8 +126,8 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
   have hf' := hf.mono hle
   obtain ⟨ν₁, hν₁⟩ := (ConvexPowerset.singleton' μ >>= 𝓛 (c₁.withInv 𝓘).to_pom).nonempty
   obtain ⟨ν₂, hν₂⟩ := (ConvexPowerset.singleton' μ >>= 𝓛 (c₂.withInv 𝓘).to_pom).nonempty
-  obtain ⟨_, _, -, hψ₁'⟩ := h₁ μ _ 𝓙 True.intro (hf'.left hdisj) ν₁ hν₁
-  obtain ⟨_, _, -, hψ₂'⟩ := h₂ μ _ 𝓙 True.intro (hf'.right hdisj) ν₂ hν₂
+  obtain ⟨𝓡₁, _, -, hdom₁, hψ₁'⟩ := h₁ μ _ 𝓙 True.intro (hf'.left hdisj) ν₁ hν₁
+  obtain ⟨𝓡₂, _, -, hdom₂, hψ₂'⟩ := h₂ μ _ 𝓙 True.intro (hf'.right hdisj) ν₂ hν₂
   obtain ⟨𝓠₁, hQ₁⟩ := hψ₁ _ hψ₁'
   obtain ⟨𝓠₂, hQ₂⟩ := hψ₂ _ hψ₂'
   -- Each thread, run in isolation with an arbitrary frame, establishes its postcondition;
@@ -132,21 +136,23 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
       ∀ ν₁ ∈ ConvexPowerset.singleton' μ₁ >>= 𝓛 (c₁.withInv 𝓘).to_pom,
         ∃ 𝓙₁', Framed 𝓘 𝓠₁ 𝓕 𝓙₁' ν₁ := by
     intro 𝓕 𝓙₁ μ₁ hf₁ ν₁ hν₁
-    obtain ⟨𝓠, 𝓙₁', hf', hψ⟩ := h₁ μ₁ 𝓕 𝓙₁ True.intro hf₁ ν₁ hν₁
+    obtain ⟨𝓠, 𝓙₁', hf', -, hψ⟩ := h₁ μ₁ 𝓕 𝓙₁ True.intro hf₁ ν₁ hν₁
     exact ⟨𝓙₁', hf'.mono ((hQ₁ 𝓠).mpr hψ)⟩
   have hthread₂ : ∀ (𝓕 𝓙₂ : ProbSpace) (μ₂ : Distr Mem), Framed 𝓘 𝓟₂ 𝓕 𝓙₂ μ₂ →
       ∀ ν₂ ∈ ConvexPowerset.singleton' μ₂ >>= 𝓛 (c₂.withInv 𝓘).to_pom,
         ∃ 𝓙₂', Framed 𝓘 𝓠₂ 𝓕 𝓙₂' ν₂ := by
     intro 𝓕 𝓙₂ μ₂ hf₂ ν₂ hν₂
-    obtain ⟨𝓠, 𝓙₂', hf', hψ⟩ := h₂ μ₂ 𝓕 𝓙₂ True.intro hf₂ ν₂ hν₂
+    obtain ⟨𝓠, 𝓙₂', hf', -, hψ⟩ := h₂ μ₂ 𝓕 𝓙₂ True.intro hf₂ ν₂ hν₂
     exact ⟨𝓙₂', hf'.mono ((hQ₂ 𝓠).mpr hψ)⟩
   -- The parallel composition is handled by Lemma C.6
   rw [Cmd.withInv, Cmd.to_pom] at hν
   obtain ⟨𝓙', hf''⟩ := lemma_C6 hf' hthread₁ hthread₂ ν hν
-  -- We still need to prove that `𝓠₁` and `𝓠₂` own disjoint variables, which requires
-  -- knowing that the footprint of a postcondition is contained in that of the precondition
-  exact ⟨𝓠₁ ⊗ 𝓠₂, 𝓙', hf'',
-    𝓠₁, 𝓠₂, sorry, le_refl _, (hQ₁ 𝓠₁).mp (le_refl _), (hQ₂ 𝓠₂).mp (le_refl _)⟩
+  -- The least models own no more variables than the preconditions of the two threads
+  have hsub₁ : 𝓠₁.dom ⊆ 𝓟₁.dom := (ProbSpace.dom_mono ((hQ₁ _).mpr hψ₁')).trans hdom₁
+  have hsub₂ : 𝓠₂.dom ⊆ 𝓟₂.dom := (ProbSpace.dom_mono ((hQ₂ _).mpr hψ₂')).trans hdom₂
+  refine ⟨𝓠₁ ⊗ 𝓠₂, 𝓙', hf'', ?_,
+    𝓠₁, 𝓠₂, hdisj.mono hsub₁ hsub₂, le_refl _, (hQ₁ 𝓠₁).mp (le_refl _), (hQ₂ 𝓠₂).mp (le_refl _)⟩
+  exact (Set.union_subset_union hsub₁ hsub₂).trans (ProbSpace.dom_mono hle)
 
 /- STRUCTURAL RULES -/
 
@@ -154,8 +160,8 @@ variable {ι : Type} [Countable ι] {𝓘 : Inv} {F : ProbSpace → Prop} {c : C
 
 lemma wp_conseq (h : φ ⊢ ψ) : wp_base 𝓘 F c φ ⊢ wp_base 𝓘 F c ψ := by
   intro 𝓟 hc μ 𝓟fr 𝓙 hF hf ν hν
-  have ⟨𝓠, 𝓙', hf', hφ⟩ := hc μ 𝓟fr 𝓙 hF hf ν hν
-  exact ⟨𝓠, 𝓙', hf', h 𝓠 hφ⟩
+  have ⟨𝓠, 𝓙', hf', hdom, hφ⟩ := hc μ 𝓟fr 𝓙 hF hf ν hν
+  exact ⟨𝓠, 𝓙', hf', hdom, h 𝓠 hφ⟩
 
 lemma wp_split {ψ : ι → OProp} :
     (⨁[ ξ ] fun v ↦ wp_base 𝓘 F c (ψ v)) ⊢ wp_base 𝓘 F c (⨁[ ξ ] ψ) := by
@@ -184,10 +190,11 @@ lemma wp_frame :
   have hd₁ : Disjoint 𝓟₁.dom 𝓕.dom :=
     hf'.disj_frame.mono_left (Set.subset_union_left : 𝓟₁.dom ⊆ 𝓟₁.dom ∪ 𝓟₂.dom)
   -- Run the program with the frame extended by `𝓟₁`
-  obtain ⟨𝓠, 𝓙', hf'', hψ⟩ := hwp μ (𝓟₁ ⊗ 𝓕) 𝓙 True.intro (hf'.right hd) ν hν
+  obtain ⟨𝓠, 𝓙', hf'', hdom, hψ⟩ := hwp μ (𝓟₁ ⊗ 𝓕) 𝓙 True.intro (hf'.right hd) ν hν
   have hd' : Disjoint 𝓟₁.dom 𝓠.dom :=
     (Set.disjoint_union_right.mp hf''.disj_frame).1.symm
-  exact ⟨𝓟₁ ⊗ 𝓠, 𝓙', hf''.unright hd₁, 𝓟₁, 𝓠, hd', le_refl _, hφ, hψ⟩
+  refine ⟨𝓟₁ ⊗ 𝓠, 𝓙', hf''.unright hd₁, ?_, 𝓟₁, 𝓠, hd', le_refl _, hφ, hψ⟩
+  exact (Set.union_subset_union_right _ hdom).trans (ProbSpace.dom_mono hle)
 
 /--
 **Assignment rule that preserves the value of the assigned expression.**
