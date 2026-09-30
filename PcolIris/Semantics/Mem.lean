@@ -367,6 +367,13 @@ lemma restrict_extend_of_notMem {σ : Mem} {x : Var} {X : Set Var} (v : Val) (h 
       extend_apply_of_ne v (fun (hc : x = y) ↦ h (hc ▸ hy))]
   · rw [restrict_apply_of_notMem _ hy, restrict_apply_of_notMem _ hy]
 
+/-- A memory below `m` stays below `τ ⊎ m` if `τ` does not overwrite it. -/
+lemma le_union_of_le {σ τ m : Mem} (h : σ ≤ m) (hd : Disjoint τ.dom σ.dom) : σ ≤ (τ ⊎ m) := by
+  rw [le_iff] at h ⊢
+  intro y w hy
+  rw [union_apply_of_notMem_dom (fun hy' ↦ Set.disjoint_left.mp hd hy' (mem_dom_of_eq_some hy))]
+  exact h y w hy
+
 /-- A memory below `τ` that lives inside `X` is below the restriction of `τ` to `X`. -/
 lemma le_restrict {σ τ : Mem} {X : Set Var} (h : σ ≤ τ) (hX : σ.dom ⊆ X) :
     σ ≤ τ.restrict X := by

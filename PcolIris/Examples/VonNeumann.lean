@@ -666,7 +666,7 @@ theorem vonNeumann_spec (L : Finset ℚ) (eps : ℚ) (heps : 0 < eps) (heps' : e
   iintro ⟨hx, hy, hpp⟩
   unfold wp
   iapply wp_seq
-  iapply wp_assign "x" 0 _ 0
+  iapply wp_assign "x" 0 _ 0 (Expr.literal_local _)
   isplitl [hx]
   · irevert hx; iapply sure_weaken; iintro hx
     isplit
@@ -674,7 +674,7 @@ theorem vonNeumann_spec (L : Finset ℚ) (eps : ℚ) (heps : 0 < eps) (heps' : e
     · iapply hx
   · iintro hx0
     iapply wp_seq
-    iapply wp_assign "y" 0 _ 0
+    iapply wp_assign "y" 0 _ 0 (Expr.literal_local _)
     isplitl [hy]
     · irevert hy; iapply sure_weaken; iintro hy
       isplit
