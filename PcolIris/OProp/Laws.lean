@@ -89,17 +89,21 @@ lemma equals_literal {e : Expr} {V : Set Var} (hmono : Expr.Mono e)
     ← hread σ]
   exact ⟨fun h ↦ ⟨hdef σ h.1, h⟩, fun h ↦ h.2⟩
 
-lemma sep {P Q : MProp} {V W : Set Var} (hP : P.Footprint V) (hQ : Q.Footprint W)
-    (hVW : Disjoint V W) : iprop(P ∗ Q).Footprint (V ∪ W) := by
+lemma sep {P Q : MProp} {V W : Set Var} (hP : P.Footprint V) (hQ : Q.Footprint W) :
+    iprop(P ∗ Q).Footprint (V ∪ W) := by
   intro σ
   constructor
   · rintro ⟨σ₁, σ₂, hd, hle, h₁, h₂⟩
-    have hP' : P σ := P.upcl ((Mem.le_union_left σ₁ σ₂).trans hle) h₁
-    have hQ' : Q σ := Q.upcl ((Mem.le_union_right hd).trans hle) h₂
-    refine ⟨Set.union_subset ((hP σ).mp hP').1 ((hQ σ).mp hQ').1,
-      σ.restrict V, σ.restrict W, ?_, ?_, ((hP σ).mp hP').2, ((hQ σ).mp hQ').2⟩
-    · exact hVW.mono (Mem.dom_restrict_subset σ V) (Mem.dom_restrict_subset σ W)
-    · rw [Mem.restrict_union_restrict]
+    have hle₁ : σ₁ ≤ σ := (Mem.le_union_left σ₁ σ₂).trans hle
+    have hle₂ : σ₂ ≤ σ := (Mem.le_union_right hd).trans hle
+    refine ⟨Set.union_subset (((hP σ₁).mp h₁).1.trans (Mem.dom_mono hle₁))
+      (((hQ σ₂).mp h₂).1.trans (Mem.dom_mono hle₂)),
+      σ₁.restrict V, σ₂.restrict W, ?_, ?_, ((hP σ₁).mp h₁).2, ((hQ σ₂).mp h₂).2⟩
+    · exact hd.mono (Mem.dom_mono (Mem.restrict_le σ₁ V)) (Mem.dom_mono (Mem.restrict_le σ₂ W))
+    · refine Mem.union_le (Mem.le_restrict ((Mem.restrict_le σ₁ V).trans hle₁) ?_)
+        (Mem.le_restrict ((Mem.restrict_le σ₂ W).trans hle₂) ?_)
+      · exact (Mem.dom_restrict_subset σ₁ V).trans Set.subset_union_left
+      · exact (Mem.dom_restrict_subset σ₂ W).trans Set.subset_union_right
   · rintro ⟨-, h⟩
     exact iprop(P ∗ Q).upcl (Mem.restrict_le σ (V ∪ W)) h
 

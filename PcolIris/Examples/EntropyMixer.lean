@@ -259,30 +259,11 @@ lemma wp_x1_branch {F : ProbSpace → Prop} (v : Val) (hv : v = 0 ∨ v = 1) :
     · irevert hy'
       iapply sure_weaken (inv_of_y_eq v hv)
 
-/-- The two values allowed for `y` by the invariant. -/
-abbrev Bit : Set Val := {0, 1}
-
-/-- A nondeterministic choice between (identical) postconditions of the shape
-"weakest precondition, and the invariant holds" can be collapsed: the invariant is precise,
-and the postcondition `ψ` of the weakest precondition is precise as well. -/
-lemma collapse_post {F : ProbSpace → Prop} {ι : Type} [Countable ι] {c : Cmd Act} :
-    OProp.nondet (fun (_ : ι) => iprop(wp_base 𝓘 F c ψ ∗ ⌈𝓘.to_MProp⌉)) ⊢
-      iprop(wp_base 𝓘 F c ψ ∗ ⌈𝓘.to_MProp⌉) :=
-  Iris.BI.Entails.trans (OProp.nondet_distrib' _ _ (Precise.sure (Inv.footprint 𝓘) 𝓘.dom_finite))
-    (Iris.BI.sep_mono_left (wp_nondet ψ_precise))
-
-/-- The first thread, given only the nondeterministic knowledge that `y` holds one of the
-two values allowed by the invariant. -/
-lemma wp_x1_nondet {F : ProbSpace → Prop} :
-    iprop(& (fun (i : Bit) => ⌈$"y" == Expr.literal i.val⌉) ∗
-        ⌈own ($"x₁")⌉ ∗ ⌈own ($"x₂")⌉ ∗ ⌈own ($"z")⌉) ⊢
-      wp_base Inv.emp F ("x₁" ::= $"y")
-        iprop(wp_base 𝓘 F ("x₂" :≈ PExpr.Bern 0.5 ⨟ "z" ::= Expr.xor ($"x₁") ($"x₂")) ψ ∗
-          ⌈𝓘.to_MProp⌉) := by
-  refine Iris.BI.Entails.trans (OProp.nondet_distrib _ _) ?_
-  refine Iris.BI.Entails.trans
-    (OProp.nondet_weaken (fun i ↦ wp_x1_branch (F := F) i.val i.2)) ?_
-  exact Iris.BI.Entails.trans wp_nsplit (wp_conseq collapse_post)
+/-- The postcondition of the first action of the first thread is convex. -/
+lemma post_convex {F : ProbSpace → Prop} {c : Cmd Act} :
+    OProp.Convex iprop(wp_base 𝓘 F c ψ ∗ ⌈𝓘.to_MProp⌉) :=
+  Convex.sep_precise (Convex.wp (Convex.of_precise ψ_precise))
+    (Precise.sure (Inv.footprint 𝓘) 𝓘.dom_finite)
 
 lemma entropy_mixer_spec :
   Inv.emp ⊢{{ φ }} entropy_mixer {{ ψ }} := by
@@ -309,11 +290,9 @@ lemma entropy_mixer_spec :
             · unfold wp_weak; iapply wp_seq; iapply wp_atom
               iintro hinv; rw [← wp_weak]
               ihave hinv := sure_weaken exists_y_of_inv $$ hinv
-              irevert hinv
-              iapply wp_exists (F := fun 𝓟fr ↦ ∀ E, 𝓟fr.mspace.MeasurableSet' E →
-                𝓟fr.μ E = 0 ∨ 𝓟fr.μ E = 1)
-              iintro hy
-              iapply wp_x1_nondet; iframe
+              iexists_case hinv [hx₁ hx₂ hz] as i ⟨hy, hx₁, hx₂, hz⟩ using post_convex
+              unfold wp_weak; iapply wp_x1_branch i.val i.2
+              iframe
           · unfold wp; iapply wp_atom; iintro hinv
             iapply wp_assign "y" 1 _ 1 (Expr.literal_local _)
             isplitl [hinv]
