@@ -40,16 +40,16 @@ notation 𝓘 " ⊢{{" φ "}} " c " {{" ψ "}}" => φ ⊢ wp 𝓘 c ψ
 
 variable {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act}
 
+/-- The `Skip` rule. -/
 lemma wp_skip (φ : OProp) :
-    φ ⊣⊢ wp_base 𝓘 F Cmd.skip φ := by
-  constructor
-  · intro 𝓟 hφ μ 𝓟fr 𝓙 _ hf ν hν
-    refine ⟨𝓟, 𝓙, ?_, hφ⟩
-    rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_skip, bind_pure] at hν
-    obtain ⟨μ, rfl⟩ := PMF.to_distr_inv hf.refines.bot_0
-    have heq : ν = μ.to_distr := sorry
-    rwa [heq]
-  · intro 𝓟 hφ; sorry
+    φ ⊢ wp_base 𝓘 F Cmd.skip φ := by
+  intro 𝓟 hφ μ 𝓟fr 𝓙 _ hf ν hν
+  refine ⟨𝓟, 𝓙, ?_, hφ⟩
+  rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_skip, bind_pure] at hν
+  have hle : μ ≤ ν := by
+    have : ν ∈ (ConvexPowerset.singleton' μ).set := hν
+    rwa [ConvexPowerset.singleton'_set_eq] at this
+  rwa [← proper_dist_maximal hf.refines.bot_0 hle]
 
 lemma wp_seq {c₁ c₂ : Cmd Act} {ψ : OProp} :
     wp_base 𝓘 F c₁ (wp_base 𝓘 F c₂ ψ) ⊢ wp_base 𝓘 F (Cmd.seq c₁ c₂) ψ := by
