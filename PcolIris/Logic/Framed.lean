@@ -22,6 +22,18 @@ lemma Inv.footprint (𝓘 : Inv) : 𝓘.to_MProp.Footprint 𝓘.dom := by
   rw [Mem.restrict_dom] at this
   exact Set.inter_eq_right.mp this
 
+/-- Every memory that `ν` gives positive probability owns the variables `D`. -/
+def Distr.Owns (ν : Distr Mem) (D : Set Var) : Prop :=
+  ∀ m : Mem, ν (m : WithBot Mem) ≠ 0 → D ⊆ m.dom
+
+/-- A run from `μ` to `ν` does not deallocate variables. -/
+def Distr.Keeps (μ ν : Distr Mem) : Prop :=
+  ∀ D, Distr.Owns μ D → Distr.Owns ν D
+
+lemma Distr.Keeps.refl (μ : Distr Mem) : Distr.Keeps μ μ := fun _ h ↦ h
+
+lemma Distr.Keeps.trans {μ ν ρ : Distr Mem} (h₁ : Distr.Keeps μ ν) (h₂ : Distr.Keeps ν ρ) : Distr.Keeps μ ρ :=
+  fun D h ↦ h₂ D (h₁ D h)
 
 /--
 `Framed 𝓘 𝓟 𝓟fr 𝓙 μ` states that the distribution `μ` refines the product of a space `𝓟`
