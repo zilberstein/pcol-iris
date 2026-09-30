@@ -189,9 +189,67 @@ lemma oplus_distrib {ι : Type} [Countable ι] (ξ : PMF ι) (φ : ι → OProp)
       ((ProbSpace.product_mono_left hsum hd).trans hle)
   · exact ⟨𝓠 v, m₂, (hdom v).symm ▸ hd.mono_left hV, le_refl _, hφ v hv, hψ⟩
 
-lemma oplus_distrib' {ι : Type} [Countable ι] (ξ : PMF ι) (φ : ι → OProp) (ψ : OProp) (h : ψ.Precise) :
-    (⨁[ ξ ] fun v ↦ iprop(φ v ∗ ψ)) ⊢ (⨁[ ξ ] φ) ∗ ψ := by
-  sorry
+/-- A precise frame can be pulled out of the branches of an outcome conjunction.  The frame
+is satisfied by the same (least) space in every branch, and the rest of each branch, completed
+by the variables it does not constrain, is independent of it. -/
+lemma oplus_distrib' {ι : Type} [Countable ι] (ξ : PMF ι) (φ : ι → OProp) (ψ : OProp)
+    (h : ψ.Precise) : (⨁[ ξ ] fun v ↦ iprop(φ v ∗ ψ)) ⊢ (⨁[ ξ ] φ) ∗ ψ := by
+  classical
+  rintro 𝓟 ⟨𝓡, W, hdsj, hdom, hsum, hφψ⟩
+  obtain ⟨v₀, hv₀⟩ := ξ.support_nonempty
+  choose m₁ m₂ hd hle h₁ h₂ using hφψ
+  obtain ⟨𝓠, hQ⟩ := h _ (h₂ v₀ hv₀)
+  have hQle : ∀ v (hv : v ∈ ξ.support), 𝓠 ≤ m₂ v hv := fun v hv ↦ (hQ _).mpr (h₂ v hv)
+  have hsubW : ∀ v (hv : v ∈ ξ.support), (m₁ v hv).dom ∪ (m₂ v hv).dom ⊆ W := fun v hv ↦ by
+    rw [← hdom v]; exact ProbSpace.dom_mono (hle v hv)
+  have hQW : 𝓠.dom ⊆ W :=
+    (ProbSpace.dom_mono (hQle v₀ hv₀)).trans (Set.subset_union_right.trans (hsubW v₀ hv₀))
+  set D := W \ 𝓠.dom with hD
+  have hm₁Q : ∀ v (hv : v ∈ ξ.support), Disjoint (m₁ v hv).dom 𝓠.dom :=
+    fun v hv ↦ (hd v hv).mono_right (ProbSpace.dom_mono (hQle v hv))
+  have hm₁D : ∀ v (hv : v ∈ ξ.support), (m₁ v hv).dom ⊆ D := fun v hv x hx ↦
+    ⟨Set.subset_union_left.trans (hsubW v hv) hx, Set.disjoint_left.mp (hm₁Q v hv) hx⟩
+  have hDR : ∀ v, D \ ∅ ⊆ (𝓡 v).dom := fun v ↦ by
+    rw [hdom v, Set.diff_empty]; exact Set.diff_subset
+  -- In each branch, the part of the space that does not belong to the frame
+  let A : ∀ v, v ∈ ξ.support → ProbSpace := fun v hv ↦
+    m₁ v hv ⊗ ProbSpace.forget (𝓡 v) (D \ (m₁ v hv).dom)
+      ((Set.diff_subset_diff_right (Set.empty_subset _)).trans (hDR v))
+  have hAdom : ∀ v hv, (A v hv).dom = D := fun v hv ↦ Set.union_diff_cancel (hm₁D v hv)
+  have hAφ : ∀ v hv, φ v (A v hv) := fun v hv ↦
+    (φ v).mono (ProbSpace.le_product_left _ _) (h₁ v hv)
+  have hAQ : ∀ v hv, (A v hv ⊗ 𝓠) ≤ 𝓡 v := by
+    intro v hv
+    have hF : Disjoint 𝓠.dom (D \ (m₁ v hv).dom) :=
+      Set.disjoint_left.mpr fun x hx hx' ↦ hx'.1.2 hx
+    refine (ProbSpace.product_swap_right hF ?_).trans ?_
+    · exact Set.disjoint_union_right.mpr ⟨hm₁Q v hv,
+        Set.disjoint_left.mpr fun x hx hx' ↦ hx'.2 hx⟩
+    · exact ProbSpace.product_forget_le
+        ((ProbSpace.product_mono_right (hQle v hv) (hm₁Q v hv)).trans (hle v hv)) _
+  let A' : ι → ProbSpace := fun v ↦ if hv : v ∈ ξ.support then A v hv else A v₀ hv₀
+  have hA'dom : ∀ v, (A' v).dom = D := fun v ↦ by
+    simp only [A']; split_ifs with hv
+    · exact hAdom v hv
+    · exact hAdom v₀ hv₀
+  obtain ⟨code, hcode⟩ := Countable.exists_injective_nat ι
+  let S : ι → ProbSpace := fun v ↦ (A' v).shift (code v)
+  have hSdisj : ∀ {i j : ι}, i ≠ j → Disjoint (S i).support (S j).support :=
+    fun hij ↦ ProbSpace.disjoint_support_shift _ _ (hcode.ne hij)
+  have hSdom : ∀ v, (S v).dom = D := hA'dom
+  refine ⟨ProbSpace.sum ξ S D hSdisj hSdom, 𝓠, Set.disjoint_sdiff_left, ?_,
+    ⟨S, D, hSdisj, hSdom, le_refl _, fun v hv ↦ ?_⟩, (hQ 𝓠).mp (le_refl _)⟩
+  · refine (ProbSpace.sum_product_le_sumProd ξ S 𝓠 D hSdisj hSdom).trans
+      ((ProbSpace.sum_mono (ProbSpace.sum_prod_disjoint 𝓠 hSdisj) hdsj
+        (ProbSpace.sum_prod_dom 𝓠 hSdom) hdom (Set.union_subset Set.diff_subset hQW)
+        fun v hv ↦ ?_).trans hsum)
+    have hv' : v ∈ ξ.support := (PMF.mem_support_iff _ _).mpr hv
+    have hA' : A' v = A v hv' := dif_pos hv'
+    refine (ProbSpace.product_mono_left (ProbSpace.shift_le _ _) ?_).trans ?_
+    · rw [hA'dom]; exact Set.disjoint_sdiff_left
+    · rw [hA']; exact hAQ v hv'
+  · have hA' : A' v = A v hv := dif_pos hv
+    exact (φ v).mono (ProbSpace.le_shift _ _) (hA' ▸ hAφ v hv)
 
 lemma oplus_weaken {ξ : PMF Val} {φ ψ : Val → OProp} (h : ∀ v ∈ ξ.support, φ v ⊢ ψ v) :
     (⨁[ξ] φ) ⊢ ⨁[ξ] ψ := by
