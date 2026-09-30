@@ -92,6 +92,12 @@ therefore defined as upward closures (`MProp.upClose`); for monotone expressions
 (`Expr.Mono`, e.g. variables and literals) this is the expected pointwise meaning
 (`Expr.equals_iff`, `MProp.own_iff`).
 
+Expressions read by the assignment and sampling rules must moreover be *local*
+(`Expr.Local`): monotone, and still defined after a variable is assigned. The first
+property makes the value known in the precondition survive interference on the invariant's
+variables; the second makes `own e` survive the assignment. Both hold of expressions built
+from variables, literals and arithmetic.
+
 ## Logical variables
 
 Logical variables and the context `Γ` are not modelled syntactically; they are ordinary Lean
