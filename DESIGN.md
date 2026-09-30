@@ -57,6 +57,20 @@ Following Iris, specifications are stated with a weakest-precondition predicate
 that the initial and final distributions refine (`Framed`): the part of the state that
 satisfies the invariant is any space `𝓙` with `⌈I⌉ 𝓙`, as in `P ⊨ φ ∗ ⌈I⌉`.
 
+## Invariants
+
+Invariants are ordered by factorization (`Inv.LE_Inv`): `𝓘 ≤ 𝓙` when `𝓘` is `𝓙 ∗ 𝓚` for
+some invariant `𝓚` on the other variables. This is the order along which
+invariant-sensitive execution is monotone (Lemma 5.3, stated in the paper for `I ∗ J`); a
+mere projection order would let other threads break the correlations that `𝓘` imposes.
+
+## Precision
+
+`Precise` follows Definition 4.1: if an assertion is satisfiable, it has a least model.
+`⌈P⌉` is precise when `P` has a finite footprint (`MProp.Footprint`); in the paper this is
+implicit, since `⌈P⌉` is interpreted over the variables of `P`. Its least model is a space
+without probabilistic information (`ProbSpace.trivialOn`).
+
 ## Expressions
 
 Expressions are shallowly embedded as functions `Mem → Option Val`, which need not be
