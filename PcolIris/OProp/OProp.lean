@@ -222,8 +222,10 @@ instance : Iris.BI.BIAffine OProp where
   affine := by
     intro φ; constructor; intro _ _ _ _; trivial
 
+/-- Precision (Definition 4.1): if `φ` is satisfiable, then it has a least model, i.e. the
+models of `φ` are exactly the spaces above some space `𝓟`. -/
 def Precise (φ : OProp) : Prop :=
-  ∃ 𝓟 : ProbSpace, ∀ 𝓠, 𝓟 ≤ 𝓠 ↔ φ 𝓠
+  ∀ 𝓠, φ 𝓠 → ∃ 𝓟 : ProbSpace, ∀ 𝓠', 𝓟 ≤ 𝓠' ↔ φ 𝓠'
 
 def oplus {ι : Type} (ξ : PMF ι) (φ : ι → OProp) : OProp where
   prop 𝓟 := ∃ 𝓠 V h hd,

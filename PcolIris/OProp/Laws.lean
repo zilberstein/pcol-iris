@@ -1,6 +1,7 @@
 import PcolIris.OProp.OProp
 import PcolIris.OProp.ProbSpaceLemmas
 import PcolIris.OProp.ProductLaws
+import PcolIris.OProp.TrivialSpace
 
 namespace Pcol
 
@@ -171,11 +172,118 @@ lemma oplus_reindex {ι : Type} {ξ : PMF ι} (e : ι ≃ ι) (hξ : ∀ i, ξ (
 
 end OProp
 
+namespace MProp
+
+/-- The pure assertion `P` only talks about the variables `V`: it requires them to be
+allocated, and only depends on their values. -/
+def Footprint (P : MProp) (V : Set Var) : Prop :=
+  ∀ σ, P σ ↔ V ⊆ σ.dom ∧ P (σ.restrict V)
+
+namespace Footprint
+
+lemma emp : (Iris.BI.BIBase.emp : MProp).Footprint ∅ :=
+  fun _ ↦ ⟨fun _ ↦ ⟨Set.empty_subset _, trivial⟩, fun _ ↦ trivial⟩
+
+lemma var_equals_literal (x : Var) (v : Val) : ($ x == Expr.literal v).Footprint {x} := by
+  intro σ
+  rw [Expr.var_equals_literal_iff, Expr.var_equals_literal_iff,
+    Mem.restrict_apply_of_mem _ (Set.mem_singleton x)]
+  exact ⟨fun h ↦ ⟨Set.singleton_subset_iff.mpr (Mem.mem_dom_of_eq_some h), h⟩, fun h ↦ h.2⟩
+
+lemma own_var (x : Var) : (own ($ x)).Footprint {x} := by
+  intro σ
+  rw [own_var_iff, own_var_iff, Mem.restrict_apply_of_mem _ (Set.mem_singleton x)]
+  refine ⟨fun h ↦ ⟨Set.singleton_subset_iff.mpr ?_, h⟩, fun h ↦ h.2⟩
+  exact Mem.mem_dom_iff.mpr (Option.isSome_iff_ne_none.mp h)
+
+/-- An equation between an expression and a literal only talks about the variables that the
+expression reads. -/
+lemma equals_literal {e : Expr} {V : Set Var} (hmono : Expr.Mono e)
+    (hread : ∀ σ, e σ = e (σ.restrict V)) (hdef : ∀ σ, (e σ).isSome → V ⊆ σ.dom) (c : Val) :
+    (e == Expr.literal c).Footprint V := by
+  intro σ
+  rw [Expr.equals_iff hmono (Expr.literal_mono c), Expr.equals_iff hmono (Expr.literal_mono c),
+    ← hread σ]
+  exact ⟨fun h ↦ ⟨hdef σ h.1, h⟩, fun h ↦ h.2⟩
+
+lemma and {P Q : MProp} {V W : Set Var} (hP : P.Footprint V) (hQ : Q.Footprint W) :
+    iprop(P ∧ Q).Footprint (V ∪ W) := by
+  intro σ
+  change P σ ∧ Q σ ↔ V ∪ W ⊆ σ.dom ∧ (P (σ.restrict (V ∪ W)) ∧ Q (σ.restrict (V ∪ W)))
+  rw [hP σ, hQ σ, hP (σ.restrict (V ∪ W)), hQ (σ.restrict (V ∪ W)), Mem.restrict_restrict,
+    Mem.restrict_restrict, Mem.restrict_dom,
+    Set.inter_eq_right.mpr (Set.subset_union_left : V ⊆ V ∪ W),
+    Set.inter_eq_right.mpr (Set.subset_union_right : W ⊆ V ∪ W)]
+  simp only [Set.union_subset_iff, Set.subset_inter_iff]
+  tauto
+
+end Footprint
+
+end MProp
+
 namespace Precise
 
-lemma sure (P : MProp) : (OProp.sure P).Precise := sorry
+/-- An almost sure assertion is precise, provided that the pure assertion only talks about a
+fixed finite set of variables (in the paper, `⌈P⌉` is interpreted over
+the variables of `P`).  Its least model records which memories over those variables are
+possible, but no probabilities. -/
+lemma sure {P : MProp} {V : Set Var} (hP : P.Footprint V) (hV : V.Finite) :
+    (OProp.sure P).Precise := by
+  classical
+  intro 𝓠₀ h₀
+  have hsat : ∃ σ, P σ := by
+    obtain ⟨k, hk⟩ := ProbSpace.support_nonempty 𝓠₀
+    exact ⟨_, h₀ hk⟩
+  let S : Set Mem := {τ | τ.dom = V ∧ P τ}
+  have hcount : S.Countable := by
+    haveI : Finite V := hV.to_subtype
+    refine Set.Countable.mono (s₂ := {τ : Mem | τ.dom = V}) (fun τ h ↦ h.1) ?_
+    have hinj : Function.Injective
+        (fun (τ : {τ : Mem | τ.dom = V}) ↦ fun (x : V) ↦ τ.val x) := by
+      intro τ τ' h; apply Subtype.ext; funext x
+      by_cases hx : x ∈ V
+      · exact congrFun h ⟨x, hx⟩
+      · have h₁ : x ∉ τ.val.dom := by rw [τ.2]; exact hx
+        have h₂ : x ∉ τ'.val.dom := by rw [τ'.2]; exact hx
+        rw [Mem.notMem_dom_iff.mp h₁, Mem.notMem_dom_iff.mp h₂]
+    exact Set.countable_coe_iff.mp hinj.countable
+  obtain ⟨σ, hσ⟩ := hsat
+  have hσS : σ.restrict V ∈ S :=
+    ⟨by rw [Mem.restrict_dom]; exact Set.inter_eq_right.mpr ((hP σ).mp hσ).1,
+      ((hP σ).mp hσ).2⟩
+  obtain ⟨f, hf⟩ := hcount.exists_eq_range ⟨_, hσS⟩
+  have hfS : ∀ i, f i ∈ S := fun i ↦ hf ▸ Set.mem_range_self i
+  refine ⟨ProbSpace.trivialOn V f (fun i ↦ (hfS i).1), fun 𝓠 ↦ ⟨?_, fun h ↦ ?_⟩⟩
+  · rintro ⟨g, hg⟩ k hk
+    exact P.upcl (hg.state k hk) (hfS (g k)).2
+  · obtain ⟨k0, hk0⟩ := ProbSpace.support_nonempty 𝓠
+    have hdom : V ⊆ 𝓠.dom := by
+      rw [← 𝓠.dom_valid k0]; exact ((hP _).mp (h hk0)).1
+    have hmem : ∀ i ∈ 𝓠.support, (𝓠.state i).restrict V ∈ Set.range f := by
+      intro i hi
+      rw [← hf]
+      refine ⟨?_, ((hP _).mp (h hi)).2⟩
+      rw [Mem.restrict_dom, 𝓠.dom_valid]; exact Set.inter_eq_right.mpr hdom
+    let g : ℕ → ℕ := fun i ↦ if hi : i ∈ 𝓠.support then (hmem i hi).choose else 0
+    refine ProbSpace.trivialOn_le hdom g (fun i hi ↦ ?_)
+    simp only [g, dif_pos hi]
+    rw [(hmem i hi).choose_spec]
+    exact Mem.restrict_le _ _
 
-lemma sep {φ ψ : OProp} (hφ : φ.Precise) (hψ : ψ.Precise) : iprop(φ ∗ ψ).Precise := by sorry
+/-- Separating conjunctions of precise assertions are precise: the least model is the product
+of the least models. -/
+lemma sep {φ ψ : OProp} (hφ : φ.Precise) (hψ : ψ.Precise) : iprop(φ ∗ ψ).Precise := by
+  rintro 𝓠 ⟨m₁, m₂, hd, -, h₁, h₂⟩
+  obtain ⟨𝓟₁, hP₁⟩ := hφ m₁ h₁
+  obtain ⟨𝓟₂, hP₂⟩ := hψ m₂ h₂
+  have hd' : Disjoint 𝓟₁.dom 𝓟₂.dom :=
+    (hd.mono_left (ProbSpace.dom_mono ((hP₁ m₁).mpr h₁))).mono_right
+      (ProbSpace.dom_mono ((hP₂ m₂).mpr h₂))
+  refine ⟨𝓟₁ ⊗ 𝓟₂, fun 𝓠' ↦ ⟨fun hle ↦ ?_, ?_⟩⟩
+  · exact ⟨𝓟₁, 𝓟₂, hd', hle, (hP₁ 𝓟₁).mp (le_refl _), (hP₂ 𝓟₂).mp (le_refl _)⟩
+  · rintro ⟨n₁, n₂, hdn, hle, hn₁, hn₂⟩
+    exact (ProbSpace.product_mono ((hP₁ n₁).mpr hn₁) ((hP₂ n₂).mpr hn₂)
+      (hdn.mono_right (ProbSpace.dom_mono ((hP₂ n₂).mpr hn₂)))).trans hle
 
 lemma oplus {ι : Type} {ξ : PMF ι} {φ : ι → OProp} (h : ∀ v ∈ ξ.support, (φ v).Precise) :
     (⨁[ξ] φ).Precise := by sorry

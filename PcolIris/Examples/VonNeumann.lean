@@ -122,6 +122,35 @@ lemma eqTest_eval {σ : Mem} {a b : Val} (hx : σ "x" = some a) (hy : σ "y" = s
     eqTest ($"x") ($"y") σ = some (if a = b then 1 else 0) := by
   simp [eqTest, Expr.var, hx, hy]
 
+lemma eqTest_mono : Expr.Mono (eqTest ($"x") ($"y")) := by
+  intro σ τ v hle h
+  obtain ⟨a, ha⟩ : ∃ a, σ "x" = some a := by
+    cases hx : σ "x" with
+    | none => simp [eqTest, Expr.var, hx] at h
+    | some a => exact ⟨a, rfl⟩
+  obtain ⟨b, hb⟩ : ∃ b, σ "y" = some b := by
+    cases hy : σ "y" with
+    | none => simp [eqTest, Expr.var, ha, hy] at h
+    | some b => exact ⟨b, rfl⟩
+  rw [eqTest_eval ha hb] at h
+  rw [eqTest_eval (Mem.le_iff.mp hle _ _ ha) (Mem.le_iff.mp hle _ _ hb), h]
+
+lemma eqTest_vars_finite : ({"x", "y"} : Set Var).Finite := Set.toFinite _
+
+lemma eqTest_footprint (c : Val) :
+    (eqTest ($"x") ($"y") == Expr.literal c).Footprint {"x", "y"} := by
+  refine MProp.Footprint.equals_literal eqTest_mono (fun σ ↦ ?_) (fun σ h ↦ ?_) c
+  · simp [eqTest, Expr.var, Mem.restrict_apply_of_mem]
+  · intro z hz
+    rcases hz with rfl | rfl
+    · cases hx : σ "x" with
+      | none => simp [eqTest, Expr.var, hx] at h
+      | some a => exact Mem.mem_dom_of_eq_some hx
+    · cases hy : σ "y" with
+      | none =>
+        cases hx : σ "x" <;> simp [eqTest, Expr.var, hx, hy] at h
+      | some b => exact Mem.mem_dom_of_eq_some hy
+
 /-- When the two coins disagree, the guard of the loop is false. -/
 lemma guard_false {b : Val} (hb : b = 0 ∨ b = 1) :
     (iprop(($"x" == Expr.literal b) ∧ ($"y" == Expr.literal (1 - b))) : MProp) ⊢
@@ -148,7 +177,9 @@ lemma guard_true :
   exact MProp.upClose_of ⟨by rw [h]; rfl, by rw [h]; rfl⟩
 
 /-- `φ₀` is precise. -/
-lemma phi0_precise : phi0.Precise := Precise.oplus fun _ _ ↦ Precise.sure _
+lemma phi0_precise : phi0.Precise := Precise.oplus fun _ _ ↦
+  Precise.sure ((MProp.Footprint.var_equals_literal _ _).and
+    (MProp.Footprint.var_equals_literal _ _)) ((Set.finite_singleton _).union (Set.finite_singleton _))
 
 /-- After the loop, `x` is a fair coin flip. -/
 lemma phi0_fair : phi0 ⊢ ($"x") ~ Bern 0.5 :=
@@ -162,7 +193,7 @@ lemma loopInv_rank (r : Set.Icc (0 : ℕ) 1) :
   · rw [if_pos h, h]
     have h1 : phi0 ⊢ (⨁[Bern 0.5] (fun (_ : Val) => ⌈eqTest ($"x") ($"y") == Expr.literal 0⌉)) :=
       OProp.oplus_weaken' fun b hb ↦ OProp.sure_weaken (guard_false (Bern_support hb))
-    have h2 := Iris.BI.Entails.trans h1 (OProp.oplus_collapse (Precise.sure _))
+    have h2 := Iris.BI.Entails.trans h1 (OProp.oplus_collapse (Precise.sure (eqTest_footprint 0) eqTest_vars_finite))
     rw [Nat.cast_zero]
     exact h2
   · have h1 : (r : ℕ) = 1 := le_antisymm r.2.2 (Nat.one_le_iff_ne_zero.mpr h)
@@ -513,7 +544,7 @@ lemma wp_body_nondet {L : Finset ℚ} {F : ProbSpace → Prop} (eps : ℚ)
   refine Iris.BI.Entails.trans (OProp.nondet_distrib _ _) ?_
   refine Iris.BI.Entails.trans (OProp.nondet_weaken (fun v ↦
     wp_body_branch (F := F) eps v.val heps heps' v.2 (hL v.val v.2).1 (hL v.val v.2).2)) ?_
-  exact wp_nsplit2 (Convex.sep_precise (Convex.wp (bodyPost'_convex _)) (Precise.sure _))
+  exact wp_nsplit2 (Convex.sep_precise (Convex.wp (bodyPost'_convex _)) (Precise.sure (Inv.footprint (inv L)) (inv L).dom_finite))
 
 /-- The loop invariant at rank `1` provides the ownership of the three variables written by
 the loop body. -/
