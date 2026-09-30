@@ -10,6 +10,7 @@ import PcolIris.OProp.ProductLaws
 import PcolIris.Semantics.Invariant
 import PcolIris.OProp.Laws
 import PcolIris.OProp.Refines
+import PcolIris.OProp.Atoms
 
 namespace Pcol
 
@@ -236,6 +237,118 @@ lemma glue {ι : Type} [Countable ι] {ξ : PMF ι} {𝓠 𝓙 : ι → ProbSpac
   · change 𝓠 i ≤ (𝓠₀ i).shift _
     rw [h𝓠₀ i hi]; exact ProbSpace.le_shift _ _
   · exact Distr.Refines.mono (ProbSpace.product_forget_le hXZ hIZ) href
+
+/-- A distribution framed with a frame is framed with any frame carrying less information. -/
+lemma mono_frame {𝓟fr' : ProbSpace} (h : 𝓟fr' ≤ 𝓟fr) (hf : Framed 𝓘 𝓟 𝓟fr 𝓙 μ) :
+    Framed 𝓘 𝓟 𝓟fr' 𝓙 μ where
+  inv := hf.inv
+  disj_frame := hf.disj_frame.mono_right (ProbSpace.dom_mono h)
+  disj_inv := hf.disj_inv.mono_left (Set.union_subset_union_right _ (ProbSpace.dom_mono h))
+  refines := Distr.Refines.mono (ProbSpace.product_mono_left
+    (ProbSpace.product_mono_right h (hf.disj_frame.mono_right (ProbSpace.dom_mono h)))
+    hf.disj_inv) hf.refines
+
+/-- **Splitting the frame.**  A distribution framed with a sum as its frame is the average of
+distributions framed with the summands. -/
+lemma split_frame {ι : Type} {ξ : PMF ι} {𝓕 : ι → ProbSpace} {V : Set Var}
+    {hd : ∀ {i j : ι}, i ≠ j → Disjoint (𝓕 i).support (𝓕 j).support}
+    {hdom : ∀ i, (𝓕 i).dom = V} (hf : Framed 𝓘 𝓟 (ProbSpace.sum ξ 𝓕 V hd hdom) 𝓙 μ) :
+    ∃ μ' : ι → Distr Mem, (∀ i, ξ i ≠ 0 → Framed 𝓘 𝓟 (𝓕 i) 𝓙 (μ' i)) ∧ μ = ξ.bind μ' := by
+  have hPV : Disjoint 𝓟.dom V := hf.disj_frame
+  have hPVJ : Disjoint (𝓟.dom ∪ V) 𝓙.dom := hf.disj_inv
+  have hdR : ∀ {i j : ι}, i ≠ j →
+      Disjoint ((𝓟 ⊗ 𝓕 i) ⊗ 𝓙).support ((𝓟 ⊗ 𝓕 j) ⊗ 𝓙).support := fun hij ↦
+    ProbSpace.disjoint_support_product' (ProbSpace.disjoint_support_product_right (hd hij))
+  have hdomR : ∀ i, ((𝓟 ⊗ 𝓕 i) ⊗ 𝓙).dom = (𝓟.dom ∪ V) ∪ 𝓙.dom := fun i ↦ by
+    change (𝓟.dom ∪ (𝓕 i).dom) ∪ 𝓙.dom = _; rw [hdom i]
+  have hchain : ProbSpace.sum ξ (fun i ↦ (𝓟 ⊗ 𝓕 i) ⊗ 𝓙) _ hdR hdomR ≤
+      (𝓟 ⊗ ProbSpace.sum ξ 𝓕 V hd hdom) ⊗ 𝓙 := by
+    refine (ProbSpace.sum_mono hdR (ProbSpace.sum_prod_disjoint (𝓟 ⊗ 𝓙) hd) hdomR
+      (ProbSpace.sum_prod_dom (𝓟 ⊗ 𝓙) hdom) ?_ fun i _ ↦ ?_).trans
+      ((ProbSpace.sumProd_le_sum_product ξ 𝓕 (𝓟 ⊗ 𝓙) V hd hdom).trans
+        ((ProbSpace.product_assoc' _ _ _).trans
+          (ProbSpace.product_mono_left (ProbSpace.product_comm hPV) ?_)))
+    · intro x hx
+      rcases hx with (h | h) | h
+      · exact Or.inr (Or.inl h)
+      · exact Or.inl h
+      · exact Or.inr (Or.inr h)
+    · have hFP : Disjoint (𝓕 i).dom 𝓟.dom := by rw [hdom i]; exact hPV.symm
+      refine (ProbSpace.product_mono_left (ProbSpace.product_comm hFP) ?_).trans
+        (ProbSpace.product_assoc _ _ _)
+      change Disjoint ((𝓕 i).dom ∪ 𝓟.dom) 𝓙.dom
+      rw [hdom i, Set.union_comm]; exact hPVJ
+    · change Disjoint (𝓟.dom ∪ V) 𝓙.dom
+      exact hPVJ
+  obtain ⟨μ', hμ', rfl⟩ := Distr.Refines.split (Distr.Refines.mono hchain hf.refines)
+  refine ⟨μ', fun i hi ↦ ⟨hf.inv, ?_, ?_, hμ' i hi⟩, rfl⟩
+  · rw [hdom i]; exact hPV
+  · rw [hdom i]; exact hPVJ
+
+/-- **Gluing along the frame.**  If each distribution `ν i` of positive weight is framed with
+the same space `𝓠` and a frame `𝓕 i`, then their `ξ`-average is framed with `𝓠` and the sum of
+the frames. -/
+lemma glue_frame {ι : Type} [Countable ι] {ξ : PMF ι} {𝓕 𝓙 : ι → ProbSpace}
+    {ν : ι → Distr Mem} {V : Set Var}
+    {hd : ∀ {i j : ι}, i ≠ j → Disjoint (𝓕 i).support (𝓕 j).support}
+    {hdom : ∀ i, (𝓕 i).dom = V} (hf : ∀ i, ξ i ≠ 0 → Framed 𝓘 𝓟 (𝓕 i) (𝓙 i) (ν i))
+    (hJ : ∀ i, ξ i ≠ 0 → (𝓙 i).dom = 𝓘.dom) :
+    ∃ 𝓙', Framed 𝓘 𝓟 (ProbSpace.sum ξ 𝓕 V hd hdom) 𝓙' (ξ.bind ν) := by
+  classical
+  obtain ⟨i₀, hi₀⟩ := ξ.support_nonempty
+  have hi₀' : ξ i₀ ≠ 0 := (PMF.mem_support_iff _ _).mp hi₀
+  have hPV : Disjoint 𝓟.dom V := hdom i₀ ▸ (hf i₀ hi₀').disj_frame
+  have hPVI : Disjoint (𝓟.dom ∪ V) 𝓘.dom := by
+    have := (hf i₀ hi₀').disj_inv
+    rwa [hdom i₀, hJ i₀ hi₀'] at this
+  let 𝓙₀ : ι → ProbSpace := fun i ↦ if ξ i = 0 then
+    ProbSpace.trivialOn 𝓘.dom (fun _ ↦ ProbSpace.junkMem 𝓘.dom)
+      (fun _ ↦ ProbSpace.junkMem_dom 𝓘.dom)
+    else 𝓙 i
+  have h𝓙₀ : ∀ i, ξ i ≠ 0 → 𝓙₀ i = 𝓙 i := fun i hi ↦ if_neg hi
+  have hJ₀ : ∀ i, (𝓙₀ i).dom = 𝓘.dom := fun i ↦ by
+    by_cases hi : ξ i = 0
+    · simp only [𝓙₀, if_pos hi]; rfl
+    · rw [h𝓙₀ i hi]; exact hJ i hi
+  let 𝓡 : ι → ProbSpace := fun i ↦ (𝓟 ⊗ 𝓕 i) ⊗ 𝓙₀ i
+  have hdR : ∀ {i j : ι}, i ≠ j → Disjoint (𝓡 i).support (𝓡 j).support := fun hij ↦
+    ProbSpace.disjoint_support_product' (ProbSpace.disjoint_support_product_right (hd hij))
+  have hdomR : ∀ i, (𝓡 i).dom = (𝓟.dom ∪ V) ∪ 𝓘.dom := fun i ↦ by
+    change (𝓟.dom ∪ (𝓕 i).dom) ∪ (𝓙₀ i).dom = _
+    rw [hdom i, hJ₀ i]
+  have hdisjR : ∀ i, Disjoint (𝓟 ⊗ 𝓕 i).dom (𝓙₀ i).dom := fun i ↦ by
+    change Disjoint (𝓟.dom ∪ (𝓕 i).dom) (𝓙₀ i).dom
+    rw [hdom i, hJ₀ i]; exact hPVI
+  have href : ProbSpace.sum ξ 𝓡 _ hdR hdomR ≼ ξ.bind ν := by
+    refine Distr.Refines.sum fun i hi ↦ ?_
+    change ((𝓟 ⊗ 𝓕 i) ⊗ 𝓙₀ i) ≼ ν i
+    rw [h𝓙₀ i hi]; exact (hf i hi).refines
+  set Z := ProbSpace.sum ξ 𝓡 _ hdR hdomR
+  have hXZ : (𝓟 ⊗ ProbSpace.sum ξ 𝓕 V hd hdom) ≤ Z := by
+    refine (ProbSpace.product_comm hPV.symm).trans
+      ((ProbSpace.sum_product_le_sumProd ξ 𝓕 𝓟 V hd hdom).trans
+        (ProbSpace.sum_mono (ProbSpace.sum_prod_disjoint 𝓟 hd) hdR (ProbSpace.sum_prod_dom 𝓟 hdom)
+          hdomR ?_ fun i _ ↦ ?_))
+    · intro x hx
+      rcases hx with h | h
+      · exact Or.inl (Or.inr h)
+      · exact Or.inl (Or.inl h)
+    · have hFP : Disjoint (𝓕 i).dom 𝓟.dom := by rw [hdom i]; exact hPV.symm
+      exact (ProbSpace.product_comm hFP.symm).trans (ProbSpace.le_product_left _ _)
+  have hIZ : 𝓘.dom ⊆ Z.dom := Set.subset_union_right
+  have hinvZ : OProp.sure 𝓘.to_MProp Z := by
+    intro n hn
+    change n ∈ (ProbSpace.sum ξ 𝓡 _ hdR hdomR).support at hn
+    rw [ProbSpace.support_sum] at hn
+    simp only [Set.mem_iUnion, Set.mem_setOf_eq, exists_prop] at hn
+    obtain ⟨i, hi, hni⟩ := hn
+    change 𝓘.to_MProp (ProbSpace.sumState 𝓡 _ n)
+    rw [ProbSpace.sumState_of_mem hdR hni]
+    have hinv : OProp.sure 𝓘.to_MProp (𝓙₀ i) := by rw [h𝓙₀ i hi]; exact (hf i hi).inv
+    exact (OProp.sure 𝓘.to_MProp).mono (ProbSpace.le_product_right (hdisjR i)) hinv hni
+  obtain ⟨hIZ', hinv'⟩ := OProp.sure_forget 𝓘.footprint hinvZ
+  exact ⟨ProbSpace.forget Z 𝓘.dom hIZ', hinv', hPV, hPVI,
+    Distr.Refines.mono (ProbSpace.product_forget_le hXZ hIZ') href⟩
 
 end Framed
 
