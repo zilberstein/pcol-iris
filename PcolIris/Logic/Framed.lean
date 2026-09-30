@@ -8,8 +8,20 @@ paper).
 import PcolIris.OProp.OProp
 import PcolIris.OProp.ProductLaws
 import PcolIris.Semantics.Invariant
+import PcolIris.OProp.Laws
 
 namespace Pcol
+
+/-- An invariant only talks about its own variables. -/
+lemma Inv.footprint (𝓘 : Inv) : 𝓘.to_MProp.Footprint 𝓘.dom := by
+  intro σ
+  change 𝓘.prop (σ.restrict 𝓘.dom) ↔ 𝓘.dom ⊆ σ.dom ∧ 𝓘.prop ((σ.restrict 𝓘.dom).restrict 𝓘.dom)
+  rw [Mem.restrict_restrict, Set.inter_self]
+  refine ⟨fun h ↦ ⟨?_, h⟩, fun h ↦ h.2⟩
+  have := 𝓘.dom_valid h
+  rw [Mem.restrict_dom] at this
+  exact Set.inter_eq_right.mp this
+
 
 /--
 `Framed 𝓘 𝓟 𝓟fr 𝓙 μ` states that the distribution `μ` refines the product of a space `𝓟`
@@ -38,6 +50,27 @@ lemma mono (h : 𝓟 ≤ 𝓟') (hf : Framed 𝓘 𝓟' 𝓟fr 𝓙 μ) : Framed
   refines := Distr.Refines.mono
     (ProbSpace.product_mono_left (ProbSpace.product_mono_left h hf.disj_frame) hf.disj_inv)
     hf.refines
+
+/-- The left factor of a framed product is framed by the right factor and the frame. -/
+lemma left {𝓟₁ 𝓟₂ : ProbSpace} (hd : Disjoint 𝓟₁.dom 𝓟₂.dom)
+    (hf : Framed 𝓘 (𝓟₁ ⊗ 𝓟₂) 𝓟fr 𝓙 μ) : Framed 𝓘 𝓟₁ (𝓟₂ ⊗ 𝓟fr) 𝓙 μ where
+  inv := hf.inv
+  disj_frame := Set.disjoint_union_right.mpr
+    ⟨hd, hf.disj_frame.mono_left Set.subset_union_left⟩
+  disj_inv := by
+    have := hf.disj_inv
+    change Disjoint (𝓟₁.dom ∪ (𝓟₂.dom ∪ 𝓟fr.dom)) 𝓙.dom
+    change Disjoint ((𝓟₁.dom ∪ 𝓟₂.dom) ∪ 𝓟fr.dom) 𝓙.dom at this
+    rwa [Set.union_assoc] at this
+  refines := Distr.Refines.mono
+    (ProbSpace.product_mono_left (ProbSpace.product_assoc' 𝓟₁ 𝓟₂ 𝓟fr) hf.disj_inv) hf.refines
+
+/-- The right factor of a framed product is framed by the left factor and the frame. -/
+lemma right {𝓟₁ 𝓟₂ : ProbSpace} (hd : Disjoint 𝓟₁.dom 𝓟₂.dom)
+    (hf : Framed 𝓘 (𝓟₁ ⊗ 𝓟₂) 𝓟fr 𝓙 μ) : Framed 𝓘 𝓟₂ (𝓟₁ ⊗ 𝓟fr) 𝓙 μ := by
+  have hc : (𝓟₂ ⊗ 𝓟₁) ≤ (𝓟₁ ⊗ 𝓟₂) := ProbSpace.product_comm hd
+  have hf' : Framed 𝓘 (𝓟₂ ⊗ 𝓟₁) 𝓟fr 𝓙 μ := hf.mono hc
+  exact hf'.left hd.symm
 
 end Framed
 

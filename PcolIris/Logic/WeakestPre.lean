@@ -117,9 +117,15 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
     (hψ₁ : ψ₁.Precise) (hψ₂ : ψ₂.Precise) :
     wp 𝓘 c₁ ψ₁ ∗ wp 𝓘 c₂ ψ₂ ⊢ wp 𝓘 (c₁.par c₂) iprop(ψ₁ ∗ ψ₂) := by
   intro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, h₁, h₂⟩ μ 𝓟fr 𝓙 _ hf ν hν
-  -- `𝓠₁` and `𝓠₂` are the least probability spaces satisfying `ψ₁` and `ψ₂`
-  obtain ⟨𝓠₁, hQ₁⟩ := hψ₁
-  obtain ⟨𝓠₂, hQ₂⟩ := hψ₂
+  -- Running each thread alone shows that `ψ₁` and `ψ₂` are satisfiable, so by precision
+  -- they have least models `𝓠₁` and `𝓠₂`
+  have hf' := hf.mono hle
+  obtain ⟨ν₁, hν₁⟩ := (ConvexPowerset.singleton' μ >>= 𝓛 (c₁.withInv 𝓘).to_pom).nonempty
+  obtain ⟨ν₂, hν₂⟩ := (ConvexPowerset.singleton' μ >>= 𝓛 (c₂.withInv 𝓘).to_pom).nonempty
+  obtain ⟨_, _, -, hψ₁'⟩ := h₁ μ _ 𝓙 True.intro (hf'.left hdisj) ν₁ hν₁
+  obtain ⟨_, _, -, hψ₂'⟩ := h₂ μ _ 𝓙 True.intro (hf'.right hdisj) ν₂ hν₂
+  obtain ⟨𝓠₁, hQ₁⟩ := hψ₁ _ hψ₁'
+  obtain ⟨𝓠₂, hQ₂⟩ := hψ₂ _ hψ₂'
   -- Each thread, run in isolation with an arbitrary frame, establishes its postcondition;
   -- by precision, the least such postcondition space is `𝓠ₖ`
   have hthread₁ : ∀ (𝓕 𝓙₁ : ProbSpace) (μ₁ : Distr Mem), Framed 𝓘 𝓟₁ 𝓕 𝓙₁ μ₁ →
@@ -136,10 +142,10 @@ lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
     exact ⟨𝓙₂', hf'.mono ((hQ₂ 𝓠).mpr hψ)⟩
   -- The parallel composition is handled by Lemma C.6
   rw [Cmd.withInv, Cmd.to_pom] at hν
-  obtain ⟨𝓙', hf'⟩ := lemma_C6 (hf.mono hle) hthread₁ hthread₂ ν hν
+  obtain ⟨𝓙', hf''⟩ := lemma_C6 hf' hthread₁ hthread₂ ν hν
   -- We still need to prove that `𝓠₁` and `𝓠₂` own disjoint variables, which requires
   -- knowing that the footprint of a postcondition is contained in that of the precondition
-  exact ⟨𝓠₁ ⊗ 𝓠₂, 𝓙', hf',
+  exact ⟨𝓠₁ ⊗ 𝓠₂, 𝓙', hf'',
     𝓠₁, 𝓠₂, sorry, le_refl _, (hQ₁ 𝓠₁).mp (le_refl _), (hQ₂ 𝓠₂).mp (le_refl _)⟩
 
 /- STRUCTURAL RULES -/
