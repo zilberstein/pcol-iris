@@ -769,9 +769,63 @@ lemma wp_weaken :
   intro 𝓟 hwp μ 𝓕 𝓙 _ hf ν hν
   exact hwp μ 𝓕 𝓙 True.intro hf ν hν
 
+/-- **Strengthening a weak triple.**  With a precise postcondition, preserving frames without
+probabilistic information is enough to preserve all frames.
+
+The frame is decomposed into its atoms, which carry no probabilistic information; the program
+is run from the conditioning of the initial distribution on each atom, and the least model of
+the postcondition, which is the same in every case, is framed with the sum of the atoms. -/
 lemma wp_strengthen (h : ψ.Precise) :
     wp_weak 𝓘 c ψ ⊢ wp 𝓘 c ψ := by
-  sorry
+  classical
+  intro 𝓟 hwp μ 𝓟fr 𝓙 _ hf ν hν
+  -- Split the initial distribution along the atoms of the frame
+  have hf' : Framed 𝓘 𝓟 𝓟fr.sumAtoms 𝓙 μ := hf.mono_frame (ProbSpace.sumAtoms_le 𝓟fr)
+  obtain ⟨μ', hμ', rfl⟩ := Framed.split_frame (hd := ProbSpace.atomSpaces_disjoint) hf'
+  obtain ⟨μ₀, hμ₀, K, hK, rfl⟩ := ConvexPowerset.mem_bind.mp hν
+  have hμ₀' : 𝓟fr.atomWeights.bind μ' = μ₀ := by
+    have h' : μ₀ ∈ (ConvexPowerset.singleton' (𝓟fr.atomWeights.bind μ')).set := hμ₀
+    rw [ConvexPowerset.singleton'_set_eq] at h'
+    exact proper_dist_maximal hf.refines.bot_0 h'
+  subst hμ₀'
+  set W := 𝓟fr.atomWeights
+  have hsupp : ∀ i, W i ≠ 0 → (μ' i).support ⊆ (W.bind μ').support := fun i hi x hx ↦
+    (PMF.mem_support_bind_iff _ _ _).mpr ⟨i, (PMF.mem_support_iff _ _).mpr hi, hx⟩
+  have hrun : ∀ i, W i ≠ 0 →
+      (μ' i).bind K ∈ ConvexPowerset.singleton' (μ' i) >>= 𝓛 (c.withInv 𝓘).to_pom :=
+    fun i hi ↦ ConvexPowerset.mem_bind.mpr ⟨μ' i, ConvexPowerset.self_mem_singleton' _, K,
+      fun x hx ↦ hK x (hsupp i hi hx), rfl⟩
+  -- Each atom carries no probabilistic information, so the weak triple applies
+  have hbr : ∀ i, ∃ 𝓠 𝓙' : ProbSpace, W i ≠ 0 →
+      Distr.Keeps (μ' i) ((μ' i).bind K) ∧ Framed 𝓘 𝓠 (𝓟fr.atomSpaces i) 𝓙' ((μ' i).bind K) ∧
+        𝓠.dom ⊆ 𝓟.dom ∧ 𝓙'.dom = 𝓘.dom ∧ ψ 𝓠 := by
+    intro i
+    by_cases hi : W i = 0
+    · exact ⟨ProbSpace.unit, ProbSpace.unit, fun h ↦ absurd hi h⟩
+    obtain ⟨hk, 𝓠, 𝓙', hfQ, hdomQ, hψ⟩ := hwp (μ' i) (𝓟fr.atomSpaces i) 𝓙
+      (fun E hE ↦ ProbSpace.atomSpace_zero_one hE) (hμ' i hi) _ (hrun i hi)
+    obtain ⟨𝓙₀, hJ₀, -, hfQ₀⟩ := hfQ.shrink_inv
+    exact ⟨𝓠, 𝓙₀, fun _ ↦ ⟨hk, hfQ₀, hdomQ, hJ₀, hψ⟩⟩
+  choose 𝓠 𝓙' hbr using hbr
+  -- The least model of the postcondition
+  obtain ⟨i₀, hi₀⟩ := W.support_nonempty
+  have hi₀' : W i₀ ≠ 0 := (PMF.mem_support_iff _ _).mp hi₀
+  obtain ⟨𝓠₀, h𝓠₀⟩ := h _ (hbr i₀ hi₀').2.2.2.2
+  have hle : ∀ i, W i ≠ 0 → 𝓠₀ ≤ 𝓠 i := fun i hi ↦ (h𝓠₀ _).mpr (hbr i hi).2.2.2.2
+  -- Glue the runs back together along the atoms of the frame
+  obtain ⟨𝓙'', hfin⟩ := Framed.glue_frame (ν := fun i ↦ (μ' i).bind K)
+    (hd := ProbSpace.atomSpaces_disjoint) (hdom := fun _ ↦ rfl)
+    (fun i hi ↦ (hbr i hi).2.1.mono (hle i hi)) (fun i hi ↦ (hbr i hi).2.2.2.1)
+  change Distr.Keeps (W.bind μ') ((W.bind μ').bind K) ∧ _
+  rw [PMF.bind_bind]
+  refine ⟨fun D hD m hm ↦ ?_, 𝓠₀, 𝓙'', hfin.mono_frame (ProbSpace.le_sumAtoms 𝓟fr),
+    (ProbSpace.dom_mono (hle i₀ hi₀')).trans (hbr i₀ hi₀').2.2.1, (h𝓠₀ 𝓠₀).mp le_rfl⟩
+  have hm' : (m : WithBot Mem) ∈ (W.bind fun i ↦ (μ' i).bind K).support :=
+    (PMF.mem_support_iff _ _).mpr hm
+  obtain ⟨i, hi, hmi⟩ := (PMF.mem_support_bind_iff _ _ _).mp hm'
+  have hi' : W i ≠ 0 := (PMF.mem_support_iff _ _).mp hi
+  exact (hbr i hi').1 D (fun m' hm'' ↦ hD m' (hsupp i hi' ((PMF.mem_support_iff _ _).mpr hm'')))
+    m ((PMF.mem_support_iff _ _).mp hmi)
 
 /-- The `Frame` rule: a frame that is independent of the program's resources is preserved. -/
 lemma wp_frame :
