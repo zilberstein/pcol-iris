@@ -230,7 +230,7 @@ lemma wp_x2_sample {F : ProbSpace → Prop} (v : Val) (hv : v = 0 ∨ v = 1) :
       wp_base 𝓘 F ("x₂" :≈ PExpr.Bern 0.5 ⨟ "z" ::= Expr.xor ($"x₁") ($"x₂")) ψ := by
   iintro ⟨h1, hx₂, hz⟩
   iapply wp_seq
-  iapply wp_bern "x₂" (0.5 : Expr) 0.5
+  iapply wp_bern "x₂" (0.5 : Expr) 0.5 (Expr.literal_local _)
   isplitl [hx₂]
   · irevert hx₂
     iapply sure_weaken (Q := iprop(((0.5 : Expr) == Expr.literal 0.5) ∧ own ($"x₂")))

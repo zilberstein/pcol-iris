@@ -263,6 +263,16 @@ lemma sampleSpace_state {x : Var} {ξ : PMF Val} {k : ℕ} (hk : k ∈ (sampleSp
     (pointSpace_disjoint x) hu]
   rfl
 
+/-- The space `p`, restricted to the variables `U`. -/
+noncomputable def ProbSpace.restrictDom (p : ProbSpace) (U : Set Var) (hU : U ⊆ p.dom) :
+    ProbSpace where
+  mspace := p.mspace
+  μ := p.μ
+  dom := U
+  state k := (p.state k).restrict U
+  dom_valid k := by rw [Mem.restrict_dom, p.dom_valid, Set.inter_eq_right.mpr hU]
+  complete := p.complete
+
 /-- A run of an action from `μ`, as a kernel. -/
 lemma run_act {a : WithInv Act} {μ ν : Distr Mem} (hμ : μ ⊥ = 0)
     (hν : ν ∈ ConvexPowerset.singleton' μ >>= Sem.sem a) :

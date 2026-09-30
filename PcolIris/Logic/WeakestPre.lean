@@ -176,9 +176,206 @@ lemma wp_assign (x : Var) (e : Expr) (ψ : OProp) (v : Val) (he : e.Local) :
   exact ⟨hk, 𝓡 ⊗ 𝓟₂, T, hfT, (show 𝓟₁.dom ∪ 𝓟₂.dom ⊆ 𝓟.dom from ProbSpace.dom_mono hle),
     ψ.mono (ProbSpace.product_comm hd) (hwand 𝓡 hd.symm h𝓡)⟩
 
-lemma wp_bern (x : Var) (e : Expr) (v : Val) {ψ : OProp} :
+/-- A run of a sampling `x :≈ Bern e`, from a distribution framed with `𝓟₁ ⊗ 𝓟₂` where `e`
+is known to have the value `v` in `𝓟₁`, is framed with `𝓟₁` without `x`, an independent
+sample of `x`, and `𝓟₂`. -/
+lemma bern_run {x : Var} {e : Expr} {v : Val} (he : e.Mono) {𝓟₁ 𝓟₂ 𝓟fr 𝓙 : ProbSpace}
+    {μ ν : Distr Mem} (hd : Disjoint 𝓟₁.dom 𝓟₂.dom)
+    (hpre : ⌈e == Expr.literal v ∧ own ($ x)⌉ 𝓟₁)
+    (hf₁ : Framed 𝓘 (𝓟₁ ⊗ 𝓟₂) 𝓟fr 𝓙 μ)
+    (hν : ν ∈ ConvexPowerset.singleton' μ >>= 𝓛 ((x :≈ PExpr.Bern e).withInv 𝓘).to_pom) :
+    x ∈ 𝓟₁.dom ∧ Distr.Keeps μ ν ∧
+      ∃ T, Framed 𝓘 ((𝓟₁.restrictDom (𝓟₁.dom \ {x}) Set.sdiff_subset ⊗
+        sampleSpace x (Bern v)) ⊗ 𝓟₂) 𝓟fr T ν := by
+  classical
+  change ν ∈ ConvexPowerset.singleton' μ >>=
+    𝓛 (Pom.singleton (Label.act (⟨Act.samp x (PExpr.Bern e), 𝓘⟩ : WithInv Act))) at hν
+  rw [Pom.lin_act] at hν
+  obtain ⟨K, rfl, hK⟩ := run_act hf₁.refines.bot_0 hν
+  -- The program's part of the space, with the frame
+  set 𝓐 := (𝓟₁ ⊗ 𝓟₂) ⊗ 𝓟fr with h𝓐def
+  have h𝓐 : 𝓐 ≼ μ := Distr.Refines.mono (ProbSpace.le_product_left _ _) hf₁.refines
+  have hIJ : 𝓘.dom ⊆ 𝓙.dom := (OProp.sure_forget 𝓘.footprint hf₁.inv).1
+  have h𝓐I : Disjoint 𝓐.dom 𝓘.dom := hf₁.disj_inv.mono_right hIJ
+  have hIμ : ∀ m : Mem, μ (m : WithBot Mem) ≠ 0 → 𝓘.prop (m.restrict 𝓘.dom) := fun m hm ↦
+    Distr.Refines.sure hf₁.refines ((OProp.sure 𝓘.to_MProp).mono
+      (ProbSpace.le_product_right hf₁.disj_inv) hf₁.inv) hm
+  have h𝓟₁𝓐 : 𝓟₁ ≤ 𝓐 :=
+    (ProbSpace.le_product_left 𝓟₁ 𝓟₂).trans (ProbSpace.le_product_left _ _)
+  have hpre𝓐 := (OProp.sure _).mono h𝓟₁𝓐 hpre
+  have hx : x ∈ 𝓟₁.dom := by
+    obtain ⟨k, hk⟩ := ProbSpace.support_nonempty 𝓟₁
+    rw [← 𝓟₁.dom_valid k, Mem.mem_dom_iff]
+    exact Option.isSome_iff_ne_none.mp (MProp.own_var_iff.mp (hpre hk).2)
+  have hx𝓐 : x ∈ 𝓐.dom := Or.inl (Or.inl hx)
+  have hxI : x ∉ 𝓘.dom := fun h ↦ Set.disjoint_left.mp h𝓐I hx𝓐 h
+  -- The interference, followed by the sampling
+  have hKm : ∀ m : Mem, μ (m : WithBot Mem) ≠ 0 → ∃ ρ ∈ 𝓘.replace m,
+      K m = ρ.bind (ConvexPowerset.botElim (sampleDistr x (Bern v))) := by
+    intro m hm
+    obtain ⟨i, hi, him⟩ := Distr.Refines.exists_le h𝓐 hm
+    obtain ⟨σ', hσ', -, hσ'e⟩ := (hpre𝓐 hi).1
+    refine sem_samp_withInv (hIμ m hm) hxI (fun τ hτ ↦ ?_) (K m) (hK m hm)
+    have hle' : 𝓐.state i ≤ (τ ⊎ m) := Mem.le_union_of_le him
+      (by rw [𝓘.dom_valid hτ, 𝓐.dom_valid]; exact h𝓐I.symm)
+    exact he (hσ'.trans hle') hσ'e
+  choose ρ hρ hKρ using hKm
+  let R : WithBot Mem → Distr Mem := ConvexPowerset.botElim fun m ↦
+    if h : μ (m : WithBot Mem) ≠ 0 then ρ m h else PMF.pure none
+  have hsplit : μ.bind K = (μ.bind R).bind (ConvexPowerset.botElim (sampleDistr x (Bern v))) := by
+    rw [PMF.bind_bind]
+    refine Distr.bind_congr_support' μ fun y hy ↦ ?_
+    rcases y with _ | m
+    · exact absurd hf₁.refines.bot_0 ((PMF.mem_support_iff _ _).mp hy)
+    · have hm : μ (m : WithBot Mem) ≠ 0 := (PMF.mem_support_iff _ _).mp hy
+      change K m = (if h : μ (m : WithBot Mem) ≠ 0 then ρ m h else PMF.pure none).bind _
+      rw [dif_pos hm]; exact hKρ m hm
+  -- The memories after the interference
+  have hR : ∀ y ∈ (μ.bind R).support, ∃ (m τ : Mem), μ (m : WithBot Mem) ≠ 0 ∧ 𝓘.prop τ ∧
+      y = ((τ ⊎ m : Mem) : WithBot Mem) := by
+    intro y hy
+    obtain ⟨z, hz, hy⟩ := (PMF.mem_support_bind_iff _ _ _).mp hy
+    rcases z with _ | m
+    · exact absurd hf₁.refines.bot_0 ((PMF.mem_support_iff _ _).mp hz)
+    · have hm : μ (m : WithBot Mem) ≠ 0 := (PMF.mem_support_iff _ _).mp hz
+      change y ∈ (if h : μ (m : WithBot Mem) ≠ 0 then ρ m h else PMF.pure none).support at hy
+      rw [dif_pos hm] at hy
+      obtain ⟨σ', ⟨τ, hτ, rfl⟩, rfl⟩ := Inv.replace_supportedIn (hIμ m hm) _ (hρ m hm) y hy
+      exact ⟨m, τ, hm, hτ, rfl⟩
+  -- The spaces after the run
+  set 𝓟₁' := 𝓟₁.restrictDom (𝓟₁.dom \ {x}) Set.sdiff_subset
+  set B := sampleSpace x (Bern v)
+  set 𝓐' := (𝓟₁' ⊗ 𝓟₂) ⊗ 𝓟fr
+  have h123 : Disjoint (𝓟₁.dom ∪ 𝓟₂.dom) 𝓟fr.dom := hf₁.disj_frame
+  have h1f : Disjoint 𝓟₁.dom 𝓟fr.dom := h123.mono_left Set.subset_union_left
+  have h2f : Disjoint 𝓟₂.dom 𝓟fr.dom := h123.mono_left Set.subset_union_right
+  have hxB : B.dom = {x} := rfl
+  have h1'B : Disjoint 𝓟₁'.dom B.dom := by rw [hxB]; exact Set.disjoint_sdiff_left
+  have h1'2 : Disjoint 𝓟₁'.dom 𝓟₂.dom := hd.mono_left Set.sdiff_subset
+  have h1'f : Disjoint 𝓟₁'.dom 𝓟fr.dom := h1f.mono_left Set.sdiff_subset
+  have h2B : Disjoint 𝓟₂.dom B.dom := by
+    rw [hxB]; exact Set.disjoint_singleton_right.mpr fun h ↦ Set.disjoint_left.mp hd hx h
+  have hfB : Disjoint 𝓟fr.dom B.dom := by
+    rw [hxB]; exact Set.disjoint_singleton_right.mpr fun h ↦ Set.disjoint_left.mp h1f hx h
+  have hsub1 : 𝓟₁'.dom ∪ B.dom ⊆ 𝓟₁.dom :=
+    Set.union_subset Set.sdiff_subset (by rw [hxB]; exact Set.singleton_subset_iff.mpr hx)
+  have hx𝓐' : x ∉ 𝓐'.dom := by
+    rintro ((⟨-, h⟩ | h) | h)
+    · exact h rfl
+    · exact Set.disjoint_left.mp hd hx h
+    · exact Set.disjoint_left.mp h1f hx h
+  have h𝓐'le : ∀ i, 𝓐'.state i ≤ 𝓐.state i := fun i ↦ by
+    simp only [𝓐', 𝓐, ProbSpace.product_state]
+    refine Mem.union_mono (Mem.union_mono (Mem.restrict_le _ _) le_rfl ?_) le_rfl ?_
+    · rw [𝓟₁.dom_valid, 𝓟₂.dom_valid]; exact hd
+    · rw [Mem.dom_union, 𝓟₁.dom_valid, 𝓟₂.dom_valid, 𝓟fr.dom_valid]; exact h123
+  -- The interference refines the program's part of the space without `x`
+  have hA : 𝓐' ≼ μ.bind R := by
+    refine Distr.Refines.bind (𝓐' := 𝓐') h𝓐 (fun E h ↦ h) (fun E _ ↦ rfl)
+      fun i _ m hm him y hy ↦ ?_
+    change y ∈ (if h : μ (m : WithBot Mem) ≠ 0 then ρ m h else PMF.pure none).support at hy
+    rw [dif_pos hm] at hy
+    obtain ⟨σ', ⟨τ, hτ, rfl⟩, rfl⟩ := Inv.replace_supportedIn (hIμ m hm) _ (hρ m hm) y hy
+    refine ⟨_, rfl, (h𝓐'le i).trans (Mem.le_union_of_le him ?_)⟩
+    rw [𝓘.dom_valid hτ, 𝓐.dom_valid]; exact h𝓐I.symm
+  -- The sample is independent of it
+  have hAB := Distr.Refines.prod hA (sampleSpace_refines x (Bern v))
+    (by rw [hxB]; exact Set.disjoint_singleton_right.mpr hx𝓐')
+    (c := fun a b ↦ (b.restrict {x} ⊎ a)) fun a b ha hb ↦ by
+      refine ⟨?_, Mem.union_le (Mem.le_union_of_le (Mem.restrict_le _ _) ?_)
+        (Mem.le_union_left _ _)⟩
+      · rw [Mem.dom_union, Mem.restrict_dom]
+        exact Set.union_subset (ha.trans Set.subset_union_right)
+          fun y hy ↦ Or.inl ⟨hb hy, hy⟩
+      · exact (Set.disjoint_singleton_left.mpr hx𝓐').mono (Mem.dom_restrict_subset _ _)
+          (Mem.dom_restrict_subset _ _)
+  have href : (𝓐' ⊗ B) ≼ μ.bind K := by
+    rw [hsplit]
+    convert hAB using 1
+    refine Distr.bind_congr_support' _ fun y hy ↦ ?_
+    obtain ⟨m, τ, -, -, rfl⟩ := hR y hy
+    change PMF.map (fun b ↦ ((((τ ⊎ m).extend x b) : Mem) : WithBot Mem)) (Bern v) =
+      PMF.map (Distr.liftMem _ _) (PMF.map _ (Bern v))
+    rw [PMF.map_comp]
+    congr 1
+    funext u
+    simp only [Function.comp_apply]
+    change (((τ ⊎ m).extend x u : Mem) : WithBot Mem) =
+      (((Mem.singleton x u).restrict {x} ⊎ (τ ⊎ m) : Mem) : WithBot Mem)
+    rw [Mem.restrict_eq_self (dom_singleton x u).subset, Mem.singleton_union]
+  -- The final memories
+  have hfin : ∀ m'' : Mem, (μ.bind K) (m'' : WithBot Mem) ≠ 0 →
+      ∃ (m τ : Mem) (b : Val), μ (m : WithBot Mem) ≠ 0 ∧ 𝓘.prop τ ∧
+        m'' = (τ ⊎ m).extend x b := by
+    intro m'' hm''
+    rw [hsplit] at hm''
+    obtain ⟨y, hy, hm''y⟩ :=
+      (PMF.mem_support_bind_iff _ _ _).mp ((PMF.mem_support_iff _ _).mpr hm'')
+    obtain ⟨m, τ, hm, hτ, rfl⟩ := hR y hy
+    obtain ⟨b, -, hb⟩ := (PMF.mem_support_map_iff _ _ _).mp hm''y
+    exact ⟨m, τ, b, hm, hτ, (WithBot.coe_injective hb).symm⟩
+  refine ⟨hx, fun D hD m'' hm'' ↦ ?_, ?_⟩
+  · obtain ⟨m, τ, b, hm, -, rfl⟩ := hfin m'' hm''
+    rw [Mem.dom_extend, Mem.dom_union]
+    exact (hD m hm).trans (Set.subset_union_right.trans (Set.subset_insert _ _))
+  -- The invariant's part of the space after the run
+  obtain ⟨T, hT, hTref, hTst⟩ := Distr.Refines.pad href (U := 𝓘.dom) fun m'' hm'' ↦ by
+    obtain ⟨m, τ, b, -, hτ, rfl⟩ := hfin m'' hm''
+    rw [Mem.dom_extend, Mem.dom_union, 𝓘.dom_valid hτ]
+    exact Set.subset_union_left.trans (Set.subset_insert _ _)
+  have hTinv : OProp.sure 𝓘.to_MProp T := fun k _ ↦ by
+    obtain ⟨m'', hm'', heq⟩ := hTst k
+    obtain ⟨m, τ, b, -, hτ, rfl⟩ := hfin m'' hm''
+    change 𝓘.prop ((T.state k).restrict 𝓘.dom)
+    rw [heq, Mem.restrict_restrict, Set.inter_self, Mem.restrict_extend_of_notMem b hxI,
+      Mem.restrict_union_left (𝓘.dom_valid hτ)]
+    exact hτ
+  -- Rearranging the factors
+  have hre : (((𝓟₁' ⊗ B) ⊗ 𝓟₂) ⊗ 𝓟fr) ≤ (𝓐' ⊗ B) :=
+    (ProbSpace.product_mono_left
+      (ProbSpace.product_swap_right h2B (Set.disjoint_union_right.mpr ⟨h1'2, h1'B⟩))
+      (Set.disjoint_union_left.mpr ⟨Set.disjoint_union_left.mpr ⟨h1'f, h2f⟩, hfB.symm⟩)).trans
+      (ProbSpace.product_swap_right hfB (Set.disjoint_union_left.mpr
+        ⟨Set.disjoint_union_right.mpr ⟨h1'f, h1'B⟩, Set.disjoint_union_right.mpr ⟨h2f, h2B⟩⟩))
+  have hsub𝓐 : ((𝓟₁'.dom ∪ B.dom) ∪ 𝓟₂.dom) ∪ 𝓟fr.dom ⊆ 𝓐.dom :=
+    Set.union_subset_union_left _ (Set.union_subset_union_left _ hsub1)
+  refine ⟨T, hTinv, ?_, ?_, Distr.Refines.mono (ProbSpace.product_mono_left hre ?_) hTref⟩
+  · exact Set.disjoint_union_left.mpr ⟨h1f.mono_left hsub1, h2f⟩
+  · rw [hT]; exact h𝓐I.mono_left hsub𝓐
+  · rw [hT]
+    refine Set.disjoint_union_left.mpr ⟨h𝓐I.mono_left ?_, ?_⟩
+    · exact Set.union_subset_union_left _
+        (Set.union_subset_union_left _ (Set.sdiff_subset : 𝓟₁'.dom ⊆ 𝓟₁.dom))
+    · rw [hxB]; exact Set.disjoint_singleton_left.mpr hxI
+
+/-- The `Bern` rule: sampling `x` makes it distributed as `Bern v`, independently of the rest
+of the state.  As for assignments, the expression must be local. -/
+lemma wp_bern (x : Var) (e : Expr) (v : Val) {ψ : OProp} (he : e.Local) :
     ⌈e == Expr.literal v ∧ own ($ x)⌉ ∗ (($ x ~ Bern v ∧ ⌈own e⌉) -∗ ψ) ⊢
-    wp_base 𝓘 F (x :≈ PExpr.Bern e) ψ := by sorry
+    wp_base 𝓘 F (x :≈ PExpr.Bern e) ψ := by
+  rintro 𝓟 ⟨𝓟₁, 𝓟₂, hd, hle, hpre, hwand⟩ μ 𝓟fr 𝓙 _ hf ν hν
+  obtain ⟨hx, hk, T, hfT⟩ := bern_run he.mono hd hpre (hf.mono hle) hν
+  set 𝓟₁' := 𝓟₁.restrictDom (𝓟₁.dom \ {x}) Set.sdiff_subset
+  set 𝓡 := 𝓟₁' ⊗ sampleSpace x (Bern v)
+  have h1'B : Disjoint 𝓟₁'.dom (sampleSpace x (Bern v)).dom := Set.disjoint_sdiff_left
+  have hsub : 𝓡.dom ⊆ 𝓟₁.dom :=
+    Set.union_subset Set.sdiff_subset (Set.singleton_subset_iff.mpr hx)
+  have h𝓡 : iprop(($ x ~ Bern v) ∧ ⌈own e⌉) 𝓡 := by
+    refine ⟨(OProp.distributed_as ($ x) (Bern v)).mono (ProbSpace.le_product_right h1'B)
+      (sampleSpace_distributed x _), fun k hk ↦ ?_⟩
+    rw [ProbSpace.support_product] at hk
+    obtain ⟨⟨a, b⟩, ⟨ha, hb⟩, rfl⟩ := hk
+    obtain ⟨u, hu⟩ := sampleSpace_state hb
+    obtain ⟨σ', hσ', hσ'd, -⟩ := (hpre ha).1
+    change own e (𝓡.state (Nat.pairEquiv (a, b)))
+    rw [ProbSpace.product_state, Equiv.symm_apply_apply, hu]
+    refine ⟨σ'.extend x u, ?_, he.extend x u hσ'd⟩
+    have := Mem.extend_le_restrict_union hσ' x u
+    rwa [𝓟₁.dom_valid] at this
+  exact ⟨hk, 𝓡 ⊗ 𝓟₂, T, hfT,
+    (Set.union_subset_union_left _ hsub).trans
+      (show 𝓟₁.dom ∪ 𝓟₂.dom ⊆ 𝓟.dom from ProbSpace.dom_mono hle),
+    ψ.mono (ProbSpace.product_comm (hd.mono_left hsub)) (hwand 𝓡 (hd.mono_left hsub).symm h𝓡)⟩
 
 lemma wp_bounded_rank {ℓ h : ℕ} (hle : ℓ ≤ h) {φ : Set.Icc ℓ h → OProp} {b rank : Expr} {p : ℚ} (hp : p > 0)
     (hrank : ∀ r, φ r ⊢ ⌈rank == Expr.literal r⌉)
