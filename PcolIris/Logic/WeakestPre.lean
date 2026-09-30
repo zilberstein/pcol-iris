@@ -176,10 +176,18 @@ lemma wp_strengthen (h : ψ.Precise) :
     wp_weak 𝓘 c ψ ⊢ wp 𝓘 c ψ := by
   sorry
 
+/-- The `Frame` rule: a frame that is independent of the program's resources is preserved. -/
 lemma wp_frame :
     φ ∗ wp 𝓘 c ψ ⊢ wp 𝓘 c iprop(φ ∗ ψ) := by
-  -- Plan: run the program with the frame `𝓕 ⊗ 𝓟₁`, and rearrange the products.
-  sorry
+  rintro 𝓟 ⟨𝓟₁, 𝓟₂, hd, hle, hφ, hwp⟩ μ 𝓕 𝓙 _ hf ν hν
+  have hf' := hf.mono hle
+  have hd₁ : Disjoint 𝓟₁.dom 𝓕.dom :=
+    hf'.disj_frame.mono_left (Set.subset_union_left : 𝓟₁.dom ⊆ 𝓟₁.dom ∪ 𝓟₂.dom)
+  -- Run the program with the frame extended by `𝓟₁`
+  obtain ⟨𝓠, 𝓙', hf'', hψ⟩ := hwp μ (𝓟₁ ⊗ 𝓕) 𝓙 True.intro (hf'.right hd) ν hν
+  have hd' : Disjoint 𝓟₁.dom 𝓠.dom :=
+    (Set.disjoint_union_right.mp hf''.disj_frame).1.symm
+  exact ⟨𝓟₁ ⊗ 𝓠, 𝓙', hf''.unright hd₁, 𝓟₁, 𝓠, hd', le_refl _, hφ, hψ⟩
 
 /--
 **Assignment rule that preserves the value of the assigned expression.**
