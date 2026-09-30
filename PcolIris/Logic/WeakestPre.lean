@@ -98,8 +98,7 @@ lemma wp_share {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ψ : OProp} 
     refine le_iff_supset.mp ?_ hν
     apply ConvexPowerset.bind_monotone (le_refl _)
     apply (Pom.lin_continuous (act := WithInv Act) (test := Test)).monotone
-    apply Cmd.withInv_monotone; refine ⟨Set.empty_subset _, ?_⟩
-    intro σ; sorry
+    exact Cmd.withInv_monotone c (Inv.le_emp 𝓘)
   sorry
 
 lemma wp_atom {𝓘 : Inv} {F : ProbSpace → Prop} {a : Act} {ψ : OProp} :
