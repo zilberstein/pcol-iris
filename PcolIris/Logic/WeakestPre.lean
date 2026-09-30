@@ -2,6 +2,7 @@ import PcolIris.Logic.Par
 import PcolIris.Logic.LemmaC6
 import PcolIris.Logic.Framed
 import PcolIris.Logic.Actions
+import PcolIris.Logic.Loop
 import PcolIris.OProp.ProbSpaceLemmas
 import PcolIris.OProp.Laws
 import PcolIris.OProp.MixLaws
