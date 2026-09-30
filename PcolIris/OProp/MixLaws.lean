@@ -239,6 +239,98 @@ theorem nondet_collapse_convex {ι : Type} [Countable ι] {ψ : OProp} (h : Conv
   rintro P ⟨ξ, hξ⟩
   exact h ξ P hξ
 
+/-! ### Mixtures with a lower bound on the probability -/
+
+/-- `oplusGe p φ ψ` is the paper's `φ ⊕≥p ψ`: a mixture of `φ` and `ψ` in which `φ` has
+probability at least `p`. The weights are an arbitrary distribution on `Bool` rather than a
+rational `Bern q`, so that the assertion is convex (the weight of `φ` in a countable mixture
+of such mixtures need not be rational). -/
+def oplusGe (p : ℚ) (φ ψ : OProp) : OProp where
+  prop 𝓟 := ∃ ρ : PMF Bool, ENNReal.ofReal (p : ℝ) ≤ ρ true ∧
+    (⨁[ρ] fun b ↦ if b then φ else ψ) 𝓟
+  upcl := fun hle ⟨ρ, hp, h⟩ ↦ ⟨ρ, hp, (⨁[ρ] fun b ↦ if b then φ else ψ).upcl hle h⟩
+
+theorem oplusGe_weaken {p : ℚ} {φ φ' ψ ψ' : OProp} (h₁ : φ ⊢ φ') (h₂ : ψ ⊢ ψ') :
+    oplusGe p φ ψ ⊢ oplusGe p φ' ψ' := by
+  rintro 𝓟 ⟨ρ, hp, h⟩
+  refine ⟨ρ, hp, oplus_weaken' (fun b _ ↦ ?_) 𝓟 h⟩
+  cases b
+  · exact h₂
+  · exact h₁
+
+theorem oplusGe_mono {p q : ℚ} (hpq : p ≤ q) {φ ψ : OProp} : oplusGe q φ ψ ⊢ oplusGe p φ ψ := by
+  rintro 𝓟 ⟨ρ, hq, h⟩
+  exact ⟨ρ, (ENNReal.ofReal_le_ofReal (by exact_mod_cast hpq)).trans hq, h⟩
+
+/-- A mixture of mixtures that give `φ` probability at least `p` gives `φ` probability at
+least `p`. -/
+theorem Convex.oplusGe {p : ℚ} {φ ψ : OProp} (hφ : Convex φ) (hψ : Convex ψ) :
+    Convex (oplusGe p φ ψ) := by
+  classical
+  intro κ _ ζ 𝓟 ⟨𝓟s, V, hd, hdom, hsum, hin⟩
+  let br : Bool → OProp := fun b ↦ if b then φ else ψ
+  have hch : ∀ k, ∃ ρ : PMF Bool, k ∈ ζ.support →
+      ENNReal.ofReal (p : ℝ) ≤ ρ true ∧ (⨁[ρ] br) (𝓟s k) := fun k ↦ by
+    by_cases hk : k ∈ ζ.support
+    · obtain ⟨ρ, h1, h2⟩ := hin k hk; exact ⟨ρ, fun _ ↦ ⟨h1, h2⟩⟩
+    · exact ⟨PMF.pure true, fun h ↦ absurd h hk⟩
+  choose ρ hρ using hch
+  have hmix : (⨁[ζ] fun k ↦ ⨁[ρ k] br) 𝓟 := ⟨𝓟s, V, hd, hdom, hsum, fun k hk ↦ (hρ k hk).2⟩
+  have hflat := oplus_flatten ζ ρ (fun _ ↦ br) 𝓟 hmix
+  have hreg := oplus_regroup _ Prod.snd br (fun b _ ↦ by cases b <;> assumption) 𝓟 hflat
+  have hmap : (ζ.bind fun k ↦ (ρ k).map (Prod.mk k)).map Prod.snd = ζ.bind ρ := by
+    rw [PMF.map_bind]
+    simp_rw [PMF.map_comp]
+    have hid : ∀ k : κ, (Prod.snd ∘ Prod.mk k : Bool → Bool) = id := fun _ ↦ rfl
+    simp_rw [hid, PMF.map_id]
+  rw [hmap] at hreg
+  refine ⟨ζ.bind ρ, ?_, hreg⟩
+  rw [PMF.bind_apply]
+  calc ENNReal.ofReal (p : ℝ) = ∑' k, ζ k * ENNReal.ofReal (p : ℝ) := by
+        rw [ENNReal.tsum_mul_right, PMF.tsum_coe, one_mul]
+    _ ≤ ∑' k, ζ k * ρ k true := ENNReal.tsum_le_tsum fun k ↦ by
+        by_cases hk : ζ k = 0
+        · simp [hk]
+        · exact mul_le_mul_right ((hρ k ((PMF.mem_support_iff _ _).mpr hk)).1) _
+
+end OProp
+
+/-- The weights of a Bernoulli distribution with parameter at most `1`. -/
+theorem Bern_apply {p : ℚ} (hp1 : p ≤ 1) (w : Val) :
+    Bern p w =
+      if w = 1 then ENNReal.ofReal (p : ℝ)
+      else if w = 0 then 1 - ENNReal.ofReal (p : ℝ) else 0 := by
+  have hle : ENNReal.ofReal ((p : ℝ)) ≤ 1 := by
+    rw [ENNReal.ofReal_le_one]; exact_mod_cast hp1
+  have hq : min 1 (ENNReal.ofReal ((p : ℝ))) = ENNReal.ofReal (p : ℝ) := min_eq_right hle
+  unfold Bern
+  rw [PMF.map_apply]
+  simp only [PMF.ofFintype_apply, tsum_bool, hq]
+  by_cases h1 : w = 1
+  · simp [h1]
+  · by_cases h0 : w = 0
+    · simp [h0]
+    · simp [h0, h1]
+
+namespace OProp
+
+/-- A Bernoulli mixture with parameter `q ≥ p` gives its first branch probability at
+least `p`. -/
+theorem oplusGe_of_bern {p q : ℚ} (hpq : p ≤ q) (hq : q ≤ 1) {φ ψ : OProp} (hφ : Convex φ)
+    (hψ : Convex ψ) : (⨁[Bern q] fun t ↦ if t = 1 then φ else ψ) ⊢ oplusGe p φ ψ := by
+  classical
+  let br : Bool → OProp := fun b ↦ if b then φ else ψ
+  have hbr : (fun (t : Val) ↦ if t = 1 then φ else ψ) = fun t ↦ br (decide (t = 1)) := by
+    funext t; by_cases h : t = 1 <;> simp [br, h]
+  intro 𝓟 h
+  rw [hbr] at h
+  refine ⟨_, ?_, oplus_regroup (Bern q) (fun t ↦ decide (t = 1)) br
+    (fun b _ ↦ by cases b <;> assumption) 𝓟 h⟩
+  rw [PMF.map_apply, tsum_eq_single (1 : Val) (fun a ha ↦ by simp [ha])]
+  simp only [decide_true, if_true]
+  rw [Bern_apply hq, if_pos rfl]
+  exact ENNReal.ofReal_le_ofReal (by exact_mod_cast hpq)
+
 end OProp
 
 end Pcol
