@@ -225,6 +225,20 @@ theorem Convex.nondet {ι : Type} [Countable ι] {φ : ι → OProp} (h : ∀ i,
   have := oplus_regroup _ Prod.snd φ (fun i _ ↦ h i) _ (oplus_flatten ζ ξ (fun _ ↦ φ) _ hmix)
   exact ⟨_, this⟩
 
+/-- A precise assertion is convex. -/
+theorem Convex.of_precise {ψ : OProp} (h : ψ.Precise) : Convex ψ := fun _ ↦ oplus_collapse h
+
+/-- The separating conjunction of a convex assertion and a precise one is convex. -/
+theorem Convex.sep_precise {φ ψ : OProp} (hφ : Convex φ) (hψ : ψ.Precise) :
+    Convex (Iris.BI.BIBase.sep φ ψ) := fun ξ ↦
+  Iris.BI.Entails.trans (oplus_distrib' ξ (fun _ ↦ φ) ψ hψ) (Iris.BI.sep_mono_left (hφ ξ))
+
+/-- A nondeterministic choice between copies of a convex assertion collapses. -/
+theorem nondet_collapse_convex {ι : Type} [Countable ι] {ψ : OProp} (h : Convex ψ) :
+    nondet (fun (_ : ι) ↦ ψ) ⊢ ψ := by
+  rintro P ⟨ξ, hξ⟩
+  exact h ξ P hξ
+
 end OProp
 
 end Pcol
