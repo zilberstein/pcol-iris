@@ -72,6 +72,21 @@ lemma right {𝓟₁ 𝓟₂ : ProbSpace} (hd : Disjoint 𝓟₁.dom 𝓟₂.dom
   have hf' : Framed 𝓘 (𝓟₂ ⊗ 𝓟₁) 𝓟fr 𝓙 μ := hf.mono hc
   exact hf'.left hd.symm
 
+/-- Moving the left factor of the frame into the program's space. -/
+lemma unright {𝓟₁ 𝓟₂ : ProbSpace} (hd₁ : Disjoint 𝓟₁.dom 𝓟fr.dom)
+    (hf : Framed 𝓘 𝓟₂ (𝓟₁ ⊗ 𝓟fr) 𝓙 μ) : Framed 𝓘 (𝓟₁ ⊗ 𝓟₂) 𝓟fr 𝓙 μ := by
+  have hd : Disjoint 𝓟₂.dom (𝓟₁.dom ∪ 𝓟fr.dom) := hf.disj_frame
+  have h₂₁ : Disjoint 𝓟₂.dom 𝓟₁.dom := (Set.disjoint_union_right.mp hd).1
+  have h₂f : Disjoint 𝓟₂.dom 𝓟fr.dom := (Set.disjoint_union_right.mp hd).2
+  refine ⟨hf.inv, Set.disjoint_union_left.mpr ⟨hd₁, h₂f⟩, ?_, ?_⟩
+  · have h := hf.disj_inv
+    change Disjoint (𝓟₂.dom ∪ (𝓟₁.dom ∪ 𝓟fr.dom)) 𝓙.dom at h
+    change Disjoint ((𝓟₁.dom ∪ 𝓟₂.dom) ∪ 𝓟fr.dom) 𝓙.dom
+    rwa [Set.union_comm 𝓟₁.dom 𝓟₂.dom, Set.union_assoc]
+  · refine Distr.Refines.mono (ProbSpace.product_mono_left ?_ hf.disj_inv) hf.refines
+    exact (ProbSpace.product_mono_left (ProbSpace.product_comm h₂₁)
+      (Set.disjoint_union_left.mpr ⟨h₂f, hd₁⟩)).trans (ProbSpace.product_assoc 𝓟₂ 𝓟₁ 𝓟fr)
+
 end Framed
 
 end Pcol
