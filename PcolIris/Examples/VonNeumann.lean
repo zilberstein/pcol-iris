@@ -551,7 +551,11 @@ lemma wp_body_nondet {L : Finset ℚ} {F : ProbSpace → Prop} (eps : ℚ)
 the loop body. -/
 lemma phi1_split : phi1 ⊢ iprop(⌈own ($"p'")⌉ ∗ (⌈own ($"x")⌉ ∗ ⌈own ($"y")⌉)) :=
   Iris.BI.Entails.trans (OProp.sure_weaken phi1_resources)
-    (Iris.BI.Entails.trans OProp.sure_sep.1 (Iris.BI.sep_mono_right OProp.sure_sep.1))
+    (Iris.BI.Entails.trans
+      (OProp.sure_sep (MProp.Footprint.own_var _)
+        ((MProp.Footprint.own_var _).sep (MProp.Footprint.own_var _) (by simp))).1
+      (Iris.BI.sep_mono_right
+        (OProp.sure_sep (MProp.Footprint.own_var _) (MProp.Footprint.own_var _)).1))
 
 /-- **The loop body.**  Starting from the loop invariant at rank `1`, one iteration of the
 loop exits with probability at least `2 * eps * (1 - eps)`. -/
