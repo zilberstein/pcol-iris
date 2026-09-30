@@ -49,6 +49,50 @@ lemma ofPMF_state {k : ℕ} (hk : D ⊆ (f k).dom) : (ofPMF ξ f D).state k = (f
   classical
   simp only [ofPMF, if_pos hk]
 
+/-- The product of two discrete spaces is below the discrete space of the product
+distribution (whose outcomes are encoded pairs), when the memories of the latter extend the
+unions of the memories of the factors. -/
+theorem ofPMF_product_le (Ξ P : PMF ℕ) (f s F : ℕ → Mem) (D E : Set Var)
+    (hF : ∀ k ∈ Ξ.support, ∀ j ∈ P.support, D ∪ E ⊆ (F (Nat.pairEquiv (k, j))).dom ∧
+      ((ofPMF Ξ f D).state k ⊎ (ofPMF P s E).state j) ≤ F (Nat.pairEquiv (k, j))) :
+    (ofPMF Ξ f D ⊗ ofPMF P s E) ≤
+      ofPMF (Ξ.bind fun k ↦ P.map fun j ↦ Nat.pairEquiv (k, j)) F (D ∪ E) := by
+  set Ξ' := Ξ.bind fun k ↦ P.map fun j ↦ Nat.pairEquiv (k, j)
+  have hsupp : ∀ n ∈ Ξ'.support, ∃ k ∈ Ξ.support, ∃ j ∈ P.support, n = Nat.pairEquiv (k, j) := by
+    intro n hn
+    obtain ⟨k, hk, hn⟩ := (PMF.mem_support_bind_iff _ _ _).mp hn
+    obtain ⟨j, hj, rfl⟩ := (PMF.mem_support_map_iff _ _ _).mp hn
+    exact ⟨k, hk, j, hj, rfl⟩
+  refine le_of_id (fun _ _ ↦ MeasurableSpace.measurableSet_top) (fun E' _ ↦ ?_) subset_rfl
+    fun n hn ↦ ?_
+  · refine ENNReal.coe_injective ?_
+    rw [ofPMF_μ, product_μ_apply, prod_coe_apply]
+    have hsing : @MeasurableSingletonClass ℕ (ofPMF Ξ f D).mspace :=
+      ⟨fun _ ↦ MeasurableSpace.measurableSet_top⟩
+    have hsing₂ : @MeasurableSingletonClass (ℕ × ℕ)
+        ((ofPMF Ξ f D).mspace.prod (ofPMF P s E).mspace) := by
+      refine ⟨fun ⟨a, b⟩ ↦ ?_⟩
+      rw [← Set.singleton_prod_singleton]
+      exact @MeasurableSet.prod ℕ ℕ (ofPMF Ξ f D).mspace (ofPMF P s E).mspace _ _
+        MeasurableSpace.measurableSet_top MeasurableSpace.measurableSet_top
+    have hS : @MeasurableSet (ℕ × ℕ) ((ofPMF Ξ f D).mspace.prod (ofPMF P s E).mspace)
+        (Nat.pairEquiv ⁻¹' E') :=
+      @Set.Countable.measurableSet (ℕ × ℕ) _ hsing₂ _ (Set.to_countable _)
+    rw [@Measure.prod_apply ℕ ℕ (ofPMF Ξ f D).mspace (ofPMF P s E).mspace _ _ _ _ hS,
+      @lintegral_countable' ℕ (ofPMF Ξ f D).mspace _ _ hsing, PMF.toOuterMeasure_bind_apply]
+    refine tsum_congr fun k ↦ ?_
+    rw [mul_comm, PMF.toOuterMeasure_map_apply]
+    congr 1
+    · exact @PMF.toMeasure_apply_singleton ℕ ⊤ Ξ k MeasurableSpace.measurableSet_top
+    · exact @PMF.toMeasure_apply_eq_toOuterMeasure_apply ℕ ⊤ P _ MeasurableSpace.measurableSet_top
+  · rw [support_ofPMF] at hn
+    obtain ⟨k, hk, j, hj, rfl⟩ := hsupp n hn
+    obtain ⟨hdom, hle⟩ := hF k hk j hj
+    rw [ofPMF_state hdom, product_state, Equiv.symm_apply_apply]
+    refine Mem.le_restrict hle ?_
+    rw [Mem.dom_union, (ofPMF Ξ f D).dom_valid, (ofPMF P s E).dom_valid]
+    rfl
+
 end ProbSpace
 
 namespace Distr
@@ -228,6 +272,51 @@ theorem Refines.bind {𝓐 𝓐' : ProbSpace} {μ : Distr Mem} (h : 𝓐 ≼ μ)
     obtain ⟨m', rfl, hfm, -⟩ := hf' k hk y hy
     simp only [Function.comp_apply, hfm]
     rfl
+
+/-- Combining the outcomes of two distributions. -/
+def liftMem (c : Mem → Mem → Mem) : WithBot Mem → WithBot Mem → WithBot Mem
+  | some a, some b => some (c a b)
+  | _, _ => none
+
+/-- **Independence.**  Drawing independently from two distributions that refine `𝓐` and `B`
+refines their product, provided the combined memories extend the memories of both. -/
+theorem Refines.prod {𝓐 B : ProbSpace} {ρ β : Distr Mem} (hA : 𝓐 ≼ ρ) (hB : B ≼ β)
+    (hd : Disjoint 𝓐.dom B.dom) {c : Mem → Mem → Mem}
+    (hc : ∀ a b : Mem, 𝓐.dom ⊆ a.dom → B.dom ⊆ b.dom →
+      𝓐.dom ∪ B.dom ⊆ (c a b).dom ∧ (a.restrict 𝓐.dom ⊎ b.restrict B.dom) ≤ c a b) :
+    (𝓐 ⊗ B) ≼ ρ.bind fun y ↦ β.map (liftMem c y) := by
+  obtain ⟨Ξ, f, g, hμ, hst, rfl⟩ := hA
+  obtain ⟨P, s, h, hμ', hst', rfl⟩ := hB
+  have hf : ∀ k ∈ Ξ.support, 𝓐.dom ⊆ (f k).dom := fun k hk ↦
+    (𝓐.dom_valid (g k)).symm.subset.trans (Mem.dom_mono (hst k hk))
+  have hs : ∀ j ∈ P.support, B.dom ⊆ (s j).dom := fun j hj ↦
+    (B.dom_valid (h j)).symm.subset.trans (Mem.dom_mono (hst' j hj))
+  let F : ℕ → Mem := fun n ↦ c (f (Nat.pairEquiv.symm n).1) (s (Nat.pairEquiv.symm n).2)
+  have hF : ∀ k j, F (Nat.pairEquiv (k, j)) = c (f k) (s j) := fun k j ↦ by
+    simp only [F, Equiv.symm_apply_apply]
+  have hle := (ProbSpace.product_mono (Refines.le_ofPMF hμ hst subset_rfl hf)
+    (Refines.le_ofPMF hμ' hst' subset_rfl hs) hd).trans
+    (ProbSpace.ofPMF_product_le Ξ P f s F 𝓐.dom B.dom fun k hk j hj ↦ by
+      rw [hF, ProbSpace.ofPMF_state (hf k hk), ProbSpace.ofPMF_state (hs j hj)]
+      exact hc _ _ (hf k hk) (hs j hj))
+  have href := refines_of_le_ofPMF hle fun n hn ↦ by
+    obtain ⟨k, hk, hn⟩ := (PMF.mem_support_bind_iff _ _ _).mp hn
+    obtain ⟨j, hj, rfl⟩ := (PMF.mem_support_map_iff _ _ _).mp hn
+    rw [hF]; exact (hc _ _ (hf k hk) (hs j hj)).1
+  convert href using 1
+  change (Ξ.map (some ∘ f)).bind (fun y ↦ (P.map (some ∘ s)).map (liftMem c y)) =
+    (Ξ.bind fun k ↦ P.map fun j ↦ Nat.pairEquiv (k, j)).map (some ∘ F)
+  rw [PMF.bind_map, PMF.map_bind]
+  congr 1
+  funext k
+  change PMF.map (liftMem c ((f k : Mem) : WithBot Mem))
+      (PMF.map (fun j ↦ ((s j : Mem) : WithBot Mem)) P) =
+    PMF.map (fun n ↦ ((F n : Mem) : WithBot Mem)) (PMF.map (fun j ↦ Nat.pairEquiv (k, j)) P)
+  rw [PMF.map_comp, PMF.map_comp]
+  congr 1
+  funext j
+  simp only [Function.comp_apply, hF]
+  rfl
 
 /-! ### Refinement of sums -/
 
