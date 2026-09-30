@@ -20,6 +20,7 @@ only assumptions this file adds.
 -/
 import PcolIris.Logic.WeakestPre
 import PcolIris.OProp.Laws
+import PcolIris.OProp.MixLaws
 
 namespace Pcol
 
@@ -270,7 +271,7 @@ nondeterministic mixture.  We therefore introduce convexity and derive the corre
 rule from `wp_nsplit`. -/
 
 /-- An assertion is convex when it is closed under probabilistic mixtures. -/
-def Convex (ψ : OProp) : Prop := ∀ {ι : Type} [Countable ι] (ξ : PMF ι), (⨁[ξ] (fun (_ : ι) => ψ)) ⊢ ψ
+abbrev Convex (ψ : OProp) : Prop := OProp.Convex ψ
 
 /-- A precise assertion is convex. -/
 lemma Convex.of_precise {ψ : OProp} (h : ψ.Precise) : Convex ψ := fun _ ↦ OProp.oplus_collapse h
@@ -326,17 +327,19 @@ lemma exists_p_of_inv (L : Finset ℚ) :
 a fair coin flip (`phi0`); otherwise they agree and another iteration starts (`phi1`). -/
 def bodyMix (q : ℚ) : OProp := ⨁[Bern q] fun t ↦ if t = 1 then phi0 else phi1
 
-/-! ### Laws of pcOL that this development does not provide yet
+/-! ### Laws about mixtures
 
-The derivation below is carried out with the rules of `PcolIris.Logic.WeakestPre`.  A few
-ingredients of the paper's proof are missing from the development; they are stated here (and
-left unproven) so that the shape of the derivation is exactly the one of Appendix F.6.  The
-structural laws about mixtures (`nondet_intro`, `Convex.nondet`, `Convex.oplus`,
-`oplus_bern_shift`) all amount to regrouping a probabilistic mixture, which the current
-model of `OProp` does not support: `ProbSpace.sum` requires the summands to have pairwise
-disjoint supports *and* to be pointwise below the ambient probability space even at null
-points, so a probability space cannot in general be re-presented as a mixture.  This is the
-same defect that the development itself documents for `sum_prod_distribute`. -/
+The derivation below is carried out with the rules of `PcolIris.Logic.WeakestPre`.  The
+convexity laws are instances of the regrouping laws of `PcolIris.OProp.MixLaws`.  Two
+ingredients of the paper's proof are still assumed:
+
+* `oplus_bern_shift` moves probability from one branch of a mixture to the other.  The
+  paper's `BoundedRank` rule has the postcondition `⊕≥p` (a mixture with probability at least
+  `p`), whereas `wp_bounded_rank` has an exact mixture; this lemma bridges the two, but it is
+  not valid in the current model, where a branch can only be split along the events of its
+  space.  Stating `wp_bounded_rank` with `⊕≥p` would make it unnecessary.
+* `body_split` turns the two independent samples into the joint mixture over the outcome of
+  the comparison. -/
 
 /-- **Introduction of a nondeterministic choice**: every branch of a nondeterministic choice
 entails the choice itself.  (In the semantics of the paper `&` is a union of sets of
@@ -353,12 +356,15 @@ lemma nondet_intro {iota : Type} [Countable iota] {phi : iota → OProp} (i : io
     subst hv
     exact (phi v).mono (ProbSpace.le_shift _ _) h
 
-/-- Nondeterministic choices are convex: a mixture of unions of mixtures is again one. -/
-lemma Convex.nondet {iota : Type} [Countable iota] {phi : iota → OProp} : Convex (OProp.nondet phi) := sorry
+/-- Nondeterministic choices between convex assertions are convex. -/
+lemma Convex.nondet {iota : Type} [Countable iota] {phi : iota → OProp}
+    (h : ∀ i, Convex (phi i)) : Convex (OProp.nondet phi) :=
+  OProp.Convex.nondet h
 
 /-- A probabilistic mixture of convex assertions is convex. -/
 lemma Convex.oplus {iota : Type} [Countable iota] {xi : PMF iota} {phi : iota → OProp}
-    (h : ∀ i, Convex (phi i)) : Convex (⨁[xi] phi) := sorry
+    (h : ∀ i, Convex (phi i)) : Convex (⨁[xi] phi) :=
+  OProp.Convex.oplus h
 
 /-- **Weakening of the probability of a two-branch mixture**, i.e. the passage from the
 mixture `⊕_q` to the mixture `⊕_{≥ p}` of the paper (`p ≤ q`): the excess probability
@@ -450,7 +456,12 @@ lemma bodyPost'_convex (p : ℚ) : Convex (bodyPost' p) :=
   Convex.oplus fun t ↦ by
     by_cases h : t = 1
     · rw [if_pos h]; exact Convex.of_precise phi0_precise
-    · rw [if_neg h]; exact Convex.nondet
+    · rw [if_neg h]
+      refine Convex.nondet fun r ↦ ?_
+      unfold loopInv
+      split_ifs
+      · exact Convex.of_precise phi0_precise
+      · exact OProp.Convex.sure _
 
 /-- Implication (23) of Appendix F.6: the two-coin mixture entails the postcondition of the
 loop body, with the exit probability weakened to `2 * eps * (1 - eps)`. -/
