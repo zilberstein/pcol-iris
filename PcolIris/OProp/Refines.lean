@@ -8,6 +8,7 @@ allocates (`Distr.Refines.pad`).
 -/
 import PcolIris.OProp.TrivialSpace
 import PcolIris.OProp.SumLaws
+import PcolIris.OProp.OProp
 
 namespace Pcol
 
@@ -92,27 +93,7 @@ lemma Refines.owns (h : 𝓡 ≼ ν) : Distr.Owns ν 𝓡.dom := by
   rw [← 𝓡.dom_valid (g k)]
   exact Mem.dom_mono (hst k hk)
 
-/-- **Padding.**  If `ν` refines `𝓡` and allocates the variables `U`, then `ν` also refines
-`𝓡` together with a space over `U` that carries no probabilistic information (the memories
-of `ν`, restricted to `U`). -/
-lemma Refines.pad (h : 𝓡 ≼ ν) {U : Set Var} (hU : Distr.Owns ν U) :
-    ∃ T : ProbSpace, T.dom = U ∧ ((𝓡 ⊗ T) ≼ ν) := by
-  obtain ⟨ξ, f, g, hμ, hst, rfl⟩ := h
-  have hf : ∀ k ∈ ξ.support, 𝓡.dom ∪ U ⊆ (f k).dom := by
-    intro k hk
-    have hk' : (ξ.map (some ∘ f)) (f k : WithBot Mem) ≠ 0 := by
-      rw [← PMF.mem_support_iff, PMF.support_map]; exact ⟨k, hk, rfl⟩
-    refine Set.union_subset ?_ (hU _ hk')
-    rw [← 𝓡.dom_valid (g k)]
-    exact Mem.dom_mono (hst k hk)
-  have hle := Refines.le_ofPMF hμ hst Set.subset_union_left hf
-  have hUZ : U ⊆ (ProbSpace.ofPMF ξ f (𝓡.dom ∪ U)).dom := Set.subset_union_right
-  exact ⟨ProbSpace.forget _ U hUZ, rfl,
-    refines_of_le_ofPMF (ProbSpace.product_forget_le hle hUZ) hf⟩
-
-/-! ### Refinement of sums -/
-
-lemma bind_congr_support {α β : Type*} (p : PMF α) {f g : α → PMF β}
+lemma bind_congr_support' {α β : Type*} (p : PMF α) {f g : α → PMF β}
     (h : ∀ a ∈ p.support, f a = g a) : p.bind f = p.bind g := by
   ext b
   simp only [PMF.bind_apply]
@@ -120,6 +101,135 @@ lemma bind_congr_support {α β : Type*} (p : PMF α) {f g : α → PMF β}
   by_cases ha : p a = 0
   · rw [ha, zero_mul, zero_mul]
   · rw [h a ((PMF.mem_support_iff _ _).mpr ha)]
+
+/-- **Padding.**  If `ν` refines `𝓡` and allocates the variables `U`, then `ν` also refines
+`𝓡` together with a space over `U` that carries no probabilistic information (the memories
+of `ν`, restricted to `U`). -/
+lemma Refines.pad (h : 𝓡 ≼ ν) {U : Set Var} (hU : Distr.Owns ν U) :
+    ∃ T : ProbSpace, T.dom = U ∧ ((𝓡 ⊗ T) ≼ ν) ∧
+      ∀ k, ∃ m : Mem, ν (m : WithBot Mem) ≠ 0 ∧ T.state k = m.restrict U := by
+  obtain ⟨ξ, f, g, hμ, hst, rfl⟩ := h
+  have hsupp : ∀ k ∈ ξ.support, (ξ.map (some ∘ f)) (f k : WithBot Mem) ≠ 0 := by
+    intro k hk
+    rw [← PMF.mem_support_iff, PMF.support_map]; exact ⟨k, hk, rfl⟩
+  have hf : ∀ k ∈ ξ.support, 𝓡.dom ∪ U ⊆ (f k).dom := by
+    intro k hk
+    refine Set.union_subset ?_ (hU _ (hsupp k hk))
+    rw [← 𝓡.dom_valid (g k)]
+    exact Mem.dom_mono (hst k hk)
+  have hle := Refines.le_ofPMF hμ hst Set.subset_union_left hf
+  have hUZ : U ⊆ (ProbSpace.ofPMF ξ f (𝓡.dom ∪ U)).dom := Set.subset_union_right
+  refine ⟨ProbSpace.forget _ U hUZ, rfl,
+    refines_of_le_ofPMF (ProbSpace.product_forget_le hle hUZ) hf, fun k ↦ ?_⟩
+  obtain ⟨k', hk', heq⟩ := ProbSpace.forget_state_restrict _ hUZ k
+  rw [ProbSpace.support_ofPMF] at hk'
+  refine ⟨f k', hsupp k' hk', ?_⟩
+  rw [heq, ProbSpace.ofPMF_state (hf k' hk'), Mem.restrict_restrict,
+    Set.inter_eq_right.mpr Set.subset_union_right]
+
+/-- Every memory of a distribution that refines `𝓡` extends a memory of `𝓑`. -/
+lemma Refines.exists_le (h : 𝓡 ≼ ν) {m : Mem} (hm : ν (m : WithBot Mem) ≠ 0) :
+    ∃ j ∈ 𝓡.support, 𝓡.state j ≤ m := by
+  obtain ⟨ξ, f, g, hμ, hst, rfl⟩ := h
+  have : (m : WithBot Mem) ∈ (ξ.map (some ∘ f)).support := (PMF.mem_support_iff _ _).mpr hm
+  rw [PMF.support_map] at this
+  obtain ⟨k, hk, hkm⟩ := this
+  cases hkm
+  exact ⟨g k, Refines.mem_support hμ hk, hst k hk⟩
+
+/-- An almost sure assertion about a refined space holds of all the memories of the
+distribution. -/
+lemma Refines.sure {P : MProp} (h : 𝓡 ≼ ν) (hP : OProp.sure P 𝓡) {m : Mem}
+    (hm : ν (m : WithBot Mem) ≠ 0) : P m := by
+  obtain ⟨j, hj, hle⟩ := Refines.exists_le h hm
+  exact P.upcl hle (hP hj)
+
+lemma map_eq_self_of_support {α : Type*} (p : PMF α) {φ : α → α}
+    (h : ∀ a ∈ p.support, φ a = a) : p.map φ = p := by
+  rw [← PMF.bind_pure_comp]
+  conv_rhs => rw [← PMF.bind_pure p]
+  refine bind_congr_support' p fun a ha ↦ ?_
+  simp only [Function.comp_apply, h a ha]
+
+/-- **Running a kernel.**  Let `𝓐` be refined by `μ`, and let `𝓐'` carry the same
+probabilistic information as `𝓐`, but other memories.  If, whenever an outcome `i` of `𝓐`
+is compatible with a memory `m` of `μ`, the kernel `K` only produces memories extending the
+memory of `𝓐'` at `i`, then `μ.bind K` refines `𝓐'`. -/
+theorem Refines.bind {𝓐 𝓐' : ProbSpace} {μ : Distr Mem} (h : 𝓐 ≼ μ)
+    (hm : ∀ E, E ∈ 𝓐' → E ∈ 𝓐) (hμ' : ∀ E, E ∈ 𝓐' → 𝓐'.μ E = 𝓐.μ E)
+    {K : WithBot Mem → Distr Mem}
+    (hK : ∀ i ∈ 𝓐.support, ∀ m : Mem, μ (m : WithBot Mem) ≠ 0 → 𝓐.state i ≤ m →
+      ∀ y ∈ (K m).support, ∃ m' : Mem, y = (m' : WithBot Mem) ∧ 𝓐'.state i ≤ m') :
+    𝓐' ≼ μ.bind K := by
+  classical
+  obtain ⟨Ξ, f, g, hΞ, hst, rfl⟩ := h
+  set ν : Distr Mem := (Ξ.map (some ∘ f)).bind K with hν
+  have hsupp : ∀ k ∈ Ξ.support, (Ξ.map (some ∘ f)) (f k : WithBot Mem) ≠ 0 := by
+    intro k hk
+    rw [← PMF.mem_support_iff, PMF.support_map]; exact ⟨k, hk, rfl⟩
+  have hνsupp : ∀ k ∈ Ξ.support, ∀ y ∈ (K (f k)).support, y ∈ ν.support := by
+    intro k hk y hy
+    exact (PMF.mem_support_bind_iff _ _ _).mpr ⟨_, (PMF.mem_support_iff _ _).mpr (hsupp k hk), hy⟩
+  -- Code the (countably many) outcomes of `ν` by natural numbers
+  haveI : Countable ↑(PMF.support ν) := (PMF.support_countable ν).to_subtype
+  obtain ⟨c, hc⟩ := Countable.exists_injective_nat ↑(PMF.support ν)
+  let code : WithBot Mem → ℕ := fun y ↦ if hy : y ∈ ν.support then c ⟨y, hy⟩ else 0
+  let dec : ℕ → WithBot Mem := fun n ↦
+    if h : ∃ y ∈ ν.support, code y = n then h.choose else ⊥
+  have hcode : ∀ y ∈ ν.support, ∀ y' ∈ ν.support, code y = code y' → y = y' := by
+    intro y hy y' hy' h
+    have e1 : code y = c ⟨y, hy⟩ := dif_pos hy
+    have e2 : code y' = c ⟨y', hy'⟩ := dif_pos hy'
+    rw [e1, e2] at h
+    exact congrArg Subtype.val (hc h)
+  have hdec : ∀ y ∈ ν.support, dec (code y) = y := by
+    intro y hy
+    have h : ∃ y' ∈ ν.support, code y' = code y := ⟨y, hy, rfl⟩
+    simp only [dec, dif_pos h]
+    exact hcode _ h.choose_spec.1 y hy h.choose_spec.2
+  let f' : ℕ → Mem := fun n ↦ match dec (Nat.unpair n).2 with
+    | some m => m
+    | none => Mem.emp
+  let g' : ℕ → ℕ := fun n ↦ g (Nat.unpair n).1
+  let φ : ℕ → WithBot Mem → ℕ := fun k y ↦ Nat.pair k (code y)
+  have hf' : ∀ k ∈ Ξ.support, ∀ y ∈ (K (f k)).support, ∃ m' : Mem, y = (m' : WithBot Mem) ∧
+      f' (φ k y) = m' ∧ 𝓐'.state (g' (φ k y)) ≤ m' := by
+    intro k hk y hy
+    obtain ⟨m', rfl, hle⟩ := hK (g k) (Refines.mem_support hΞ hk) (f k) (hsupp k hk) (hst k hk)
+      y hy
+    refine ⟨m', rfl, ?_, ?_⟩
+    · simp only [f', φ, Nat.unpair_pair, hdec _ (hνsupp k hk _ hy)]
+    · simp only [g', φ, Nat.unpair_pair]; exact hle
+  let Ξ' : PMF ℕ := Ξ.bind fun k ↦ (K (f k)).map (φ k)
+  refine ⟨Ξ', f', g', fun {E} hE ↦ ?_, fun n hn ↦ ?_, ?_⟩
+  · rw [hμ' E hE, hΞ (hm E hE), tsum_subtype, tsum_subtype, ← PMF.toOuterMeasure_apply,
+      ← PMF.toOuterMeasure_apply, PMF.toOuterMeasure_bind_apply, PMF.toOuterMeasure_apply]
+    refine tsum_congr fun k ↦ ?_
+    rw [PMF.toOuterMeasure_map_apply]
+    by_cases hk : g k ∈ E
+    · have : φ k ⁻¹' (g' ⁻¹' E) = Set.univ := by
+        ext y; simp only [Set.mem_preimage, g', φ, Nat.unpair_pair, hk, Set.mem_univ]
+      rw [this, (PMF.toOuterMeasure_apply_eq_one_iff _ _).mpr (Set.subset_univ _), mul_one,
+        Set.indicator_of_mem (show k ∈ g ⁻¹' E from hk)]
+    · have : φ k ⁻¹' (g' ⁻¹' E) = ∅ := by
+        ext y; simp only [Set.mem_preimage, g', φ, Nat.unpair_pair, hk, Set.mem_empty_iff_false]
+      rw [this, (PMF.toOuterMeasure_apply_eq_zero_iff _ _).mpr (Set.disjoint_empty _), mul_zero,
+        Set.indicator_of_notMem (show k ∉ g ⁻¹' E from hk)]
+  · obtain ⟨k, hk, hn⟩ := (PMF.mem_support_bind_iff _ _ _).mp hn
+    rw [PMF.mem_support_map_iff] at hn
+    obtain ⟨y, hy, rfl⟩ := hn
+    obtain ⟨m', -, hfm, hle⟩ := hf' k hk y hy
+    rw [hfm]; exact hle
+  · change (Ξ.map (some ∘ f)).bind K = (Ξ.bind fun k ↦ (K (f k)).map (φ k)).map (some ∘ f')
+    rw [PMF.bind_map, PMF.map_bind]
+    refine bind_congr_support' Ξ fun k hk ↦ ?_
+    rw [PMF.map_comp]
+    refine (map_eq_self_of_support (K (f k)) fun y hy ↦ ?_).symm
+    obtain ⟨m', rfl, hfm, -⟩ := hf' k hk y hy
+    simp only [Function.comp_apply, hfm]
+    rfl
+
+/-! ### Refinement of sums -/
 
 section Sums
 
@@ -193,7 +303,7 @@ theorem Refines.sum {ν : ι → Distr Mem} (hν : ∀ i, ξ i ≠ 0 → 𝓡 i 
     exact hst k hk
   · change ξ.bind ν = (ξ.bind fun i ↦ (Ξ i).map (e i)).map (some ∘ F')
     rw [PMF.map_bind]
-    refine bind_congr_support ξ fun i hi ↦ ?_
+    refine bind_congr_support' ξ fun i hi ↦ ?_
     rw [PMF.map_comp, (hw i ((PMF.mem_support_iff _ _).mp hi)).2.2]
     congr 1
     funext k

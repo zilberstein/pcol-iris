@@ -328,6 +328,45 @@ lemma union_le {σ₁ σ₂ σ : Mem} (h₁ : σ₁ ≤ σ) (h₂ : σ₂ ≤ σ
   · rw [union_apply_of_mem_dom hs] at hx; exact h₁ x v hx
   · rw [union_apply_of_notMem_dom hs] at hx; exact h₂ x v hx
 
+/-! ### Assignment -/
+
+lemma extend_apply_self (σ : Mem) (x : Var) (v : Val) : σ.extend x v x = some v := if_pos rfl
+
+lemma extend_apply_of_ne {σ : Mem} {x y : Var} (v : Val) (h : x ≠ y) :
+    σ.extend x v y = σ y := if_neg h
+
+lemma dom_extend (σ : Mem) (x : Var) (v : Val) : (σ.extend x v).dom = insert x σ.dom := by
+  ext y
+  by_cases h : x = y
+  · subst h; simp [mem_dom_iff, extend_apply_self]
+  · rw [Set.mem_insert_iff, mem_dom_iff, mem_dom_iff, extend_apply_of_ne v h]
+    exact ⟨Or.inr, fun h' ↦ h'.resolve_left (Ne.symm h)⟩
+
+lemma extend_mono {σ τ : Mem} (h : σ ≤ τ) (x : Var) (v : Val) : σ.extend x v ≤ τ.extend x v := by
+  rw [le_iff] at h ⊢
+  intro y w hy
+  by_cases hxy : x = y
+  · subst hxy; rwa [extend_apply_self] at hy ⊢
+  · rw [extend_apply_of_ne v hxy] at hy ⊢; exact h y w hy
+
+lemma union_extend (σ τ : Mem) (x : Var) (v : Val) :
+    (σ ⊎ τ).extend x v = (σ.extend x v ⊎ τ) := by
+  funext y
+  by_cases hxy : x = y
+  · subst hxy
+    rw [extend_apply_self, union_apply_of_mem_dom (by simp [mem_dom_iff, extend_apply_self]),
+      extend_apply_self]
+  · rw [extend_apply_of_ne v hxy]
+    simp only [union, extend_apply_of_ne v hxy]
+
+lemma restrict_extend_of_notMem {σ : Mem} {x : Var} {X : Set Var} (v : Val) (h : x ∉ X) :
+    (σ.extend x v).restrict X = σ.restrict X := by
+  funext y
+  by_cases hy : y ∈ X
+  · rw [restrict_apply_of_mem _ hy, restrict_apply_of_mem _ hy,
+      extend_apply_of_ne v (fun (hc : x = y) ↦ h (hc ▸ hy))]
+  · rw [restrict_apply_of_notMem _ hy, restrict_apply_of_notMem _ hy]
+
 /-- A memory below `τ` that lives inside `X` is below the restriction of `τ` to `X`. -/
 lemma le_restrict {σ τ : Mem} {X : Set Var} (h : σ ≤ τ) (hX : σ.dom ⊆ X) :
     σ ≤ τ.restrict X := by

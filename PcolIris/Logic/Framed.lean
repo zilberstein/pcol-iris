@@ -113,7 +113,7 @@ lemma pad (hf : Framed 𝓘 𝓟 𝓟fr 𝓙 μ) {U : Set Var} (hU : Distr.Owns 
     (hUfr : Disjoint U 𝓟fr.dom) (hUJ : Disjoint U 𝓙.dom) :
     ∃ 𝓟' : ProbSpace, 𝓟 ≤ 𝓟' ∧ 𝓟'.dom = 𝓟.dom ∪ U ∧ Framed 𝓘 𝓟' 𝓟fr 𝓙 μ := by
   set U' := U \ 𝓟.dom
-  obtain ⟨T, hT, hTref⟩ := Distr.Refines.pad hf.refines (U := U') fun m hm ↦
+  obtain ⟨T, hT, hTref, -⟩ := Distr.Refines.pad hf.refines (U := U') fun m hm ↦
     Set.sdiff_subset.trans (hU m hm)
   have hfr : Disjoint T.dom 𝓟fr.dom := hT ▸ hUfr.mono_left Set.sdiff_subset
   have hJ : Disjoint T.dom 𝓙.dom := hT ▸ hUJ.mono_left Set.sdiff_subset
