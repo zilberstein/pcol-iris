@@ -65,10 +65,36 @@ lemma wp_seq {c₁ c₂ : Cmd Act} {ψ : OProp} :
     (ConvexPowerset.mem_bind.mpr ⟨ξ, ConvexPowerset.self_mem_singleton' _, f, hf, rfl⟩)
   exact ⟨Distr.Keeps.trans hk hk', 𝓠, 𝓙'', hf'', hdom'.trans hdom, hψ⟩
 
-lemma wp_if_true {b : Expr} {c₁ c₂ : Cmd Act} {φ ψ : OProp} :
+/-- The `If` rule, when the guard is known to hold.  The guard must be monotone, so that its
+value in the precondition is its value in the actual memories. -/
+lemma wp_if_true {b : Expr} {c₁ c₂ : Cmd Act} {ψ : OProp} (hb : b.Mono) :
      ⌈b == Expr.literal 1⌉ ∧ wp_base 𝓘 F c₁ ψ ⊢ wp_base 𝓘 F (Cmd.if_stmt b c₁ c₂) ψ := by
-  intro 𝓟 ⟨htrue, hwp⟩ μ 𝓟fr 𝓙 hF href ν hν; rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_if_stmt] at hν
-  sorry
+  intro 𝓟 ⟨htrue, hwp⟩ μ 𝓟fr 𝓙 hF hf ν hν
+  -- The guard holds in every initial memory
+  have hb' : ∀ m : Mem, μ (m : WithBot Mem) ≠ 0 → b m = some 1 := fun m hm ↦ by
+    obtain ⟨σ', hσ', -, hσ'b⟩ := Distr.Refines.sure hf.refines ((OProp.sure _).mono
+      ((ProbSpace.le_product_left _ _).trans (ProbSpace.le_product_left _ _)) htrue) hm
+    exact hb hσ' hσ'b
+  refine hwp μ 𝓟fr 𝓙 hF hf ν ?_
+  rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_if_stmt] at hν
+  obtain ⟨μ₀, hμ₀, K, hK, rfl⟩ := ConvexPowerset.mem_bind.mp hν
+  have h' : μ₀ ∈ (ConvexPowerset.singleton' μ).set := hμ₀
+  rw [ConvexPowerset.singleton'_set_eq] at h'
+  obtain rfl := proper_dist_maximal hf.refines.bot_0 h'
+  refine ConvexPowerset.mem_bind.mpr ⟨μ, hμ₀, K, fun y hy ↦ ?_, rfl⟩
+  rcases y with _ | m
+  · exact Set.mem_univ _
+  · have htest : (Linearization.Sem.sem (Test.lift b) m : ConvexPowerset Bool) = pure true := by
+      change (match b m with
+        | some q => pure (decide (q ≠ 0))
+        | none => ⊥ : ConvexPowerset Bool) = _
+      rw [hb' m ((PMF.mem_support_iff _ _).mp hy)]
+      norm_num
+    have hK' : K m ∈ ((Linearization.Sem.sem (Test.lift b) m : ConvexPowerset Bool) >>=
+        fun r ↦ (bif r then 𝓛 (c₁.withInv 𝓘).to_pom m else 𝓛 (c₂.withInv 𝓘).to_pom m :
+          ConvexPowerset Mem)) := hK (m : WithBot Mem) hy
+    rw [htest, ConvexPowerset.pure_bind] at hK'
+    exact hK'
 
 /-- A run of an assignment `x := e`, from a distribution framed with `𝓟₁ ⊗ 𝓟₂` where `e` is
 known to have the value `v` in `𝓟₁`, is framed with `𝓟₁` updated by `x := v`, and `𝓟₂`. -/
