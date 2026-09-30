@@ -2,6 +2,7 @@ import PcolIris.OProp.OProp
 import PcolIris.OProp.ProbSpaceLemmas
 import PcolIris.OProp.ProductLaws
 import PcolIris.OProp.TrivialSpace
+import PcolIris.OProp.SumLaws
 
 namespace Pcol
 
@@ -227,8 +228,8 @@ namespace Precise
 fixed finite set of variables (in the paper, `⌈P⌉` is interpreted over
 the variables of `P`).  Its least model records which memories over those variables are
 possible, but no probabilities. -/
-lemma sure {P : MProp} {V : Set Var} (hP : P.Footprint V) (hV : V.Finite) :
-    (OProp.sure P).Precise := by
+lemma sureDom {P : MProp} {V : Set Var} (hP : P.Footprint V) (hV : V.Finite) :
+    (OProp.sure P).PreciseDom V := by
   classical
   intro 𝓠₀ h₀
   have hsat : ∃ σ, P σ := by
@@ -253,7 +254,7 @@ lemma sure {P : MProp} {V : Set Var} (hP : P.Footprint V) (hV : V.Finite) :
       ((hP σ).mp hσ).2⟩
   obtain ⟨f, hf⟩ := hcount.exists_eq_range ⟨_, hσS⟩
   have hfS : ∀ i, f i ∈ S := fun i ↦ hf ▸ Set.mem_range_self i
-  refine ⟨ProbSpace.trivialOn V f (fun i ↦ (hfS i).1), fun 𝓠 ↦ ⟨?_, fun h ↦ ?_⟩⟩
+  refine ⟨ProbSpace.trivialOn V f (fun i ↦ (hfS i).1), rfl, fun 𝓠 ↦ ⟨?_, fun h ↦ ?_⟩⟩
   · rintro ⟨g, hg⟩ k hk
     exact P.upcl (hg.state k hk) (hfS (g k)).2
   · obtain ⟨k0, hk0⟩ := ProbSpace.support_nonempty 𝓠
@@ -270,6 +271,10 @@ lemma sure {P : MProp} {V : Set Var} (hP : P.Footprint V) (hV : V.Finite) :
     rw [(hmem i hi).choose_spec]
     exact Mem.restrict_le _ _
 
+lemma sure {P : MProp} {V : Set Var} (hP : P.Footprint V) (hV : V.Finite) :
+    (OProp.sure P).Precise :=
+  (sureDom hP hV).precise
+
 /-- Separating conjunctions of precise assertions are precise: the least model is the product
 of the least models. -/
 lemma sep {φ ψ : OProp} (hφ : φ.Precise) (hψ : ψ.Precise) : iprop(φ ∗ ψ).Precise := by
@@ -285,8 +290,39 @@ lemma sep {φ ψ : OProp} (hφ : φ.Precise) (hψ : ψ.Precise) : iprop(φ ∗ �
     exact (ProbSpace.product_mono ((hP₁ n₁).mpr hn₁) ((hP₂ n₂).mpr hn₂)
       (hdn.mono_right (ProbSpace.dom_mono ((hP₂ n₂).mpr hn₂)))).trans hle
 
-lemma oplus {ι : Type} [Countable ι] {ξ : PMF ι} {φ : ι → OProp} (h : ∀ v ∈ ξ.support, (φ v).Precise) :
-    (⨁[ξ] φ).Precise := by sorry
+/-- Outcome conjunctions of precise assertions owning the same variables are precise: the
+least model is the sum of the least models of the branches (moved to disjoint outcomes).
+Thanks to the indexed model, no partitioning side condition is needed. -/
+lemma oplusDom {ι : Type} [Countable ι] {ξ : PMF ι} {φ : ι → OProp} {V : Set Var}
+    (h : ∀ v ∈ ξ.support, (φ v).PreciseDom V) : (⨁[ξ] φ).PreciseDom V := by
+  classical
+  rintro 𝓠 ⟨𝓡, W, -, -, -, hφ⟩
+  obtain ⟨v₀, hv₀⟩ := ξ.support_nonempty
+  have hmin : ∀ v ∈ ξ.support, ∃ 𝓟 : ProbSpace, 𝓟.dom = V ∧ ∀ 𝓠', 𝓟 ≤ 𝓠' ↔ φ v 𝓠' :=
+    fun v hv ↦ h v hv _ (hφ v hv)
+  let P : ι → ProbSpace := fun v ↦
+    if hv : v ∈ ξ.support then (hmin v hv).choose else (hmin v₀ hv₀).choose
+  have hPdom : ∀ v, (P v).dom = V := by
+    intro v; simp only [P]; split_ifs with hv
+    · exact (hmin v hv).choose_spec.1
+    · exact (hmin v₀ hv₀).choose_spec.1
+  have hPmin : ∀ v ∈ ξ.support, ∀ 𝓠', P v ≤ 𝓠' ↔ φ v 𝓠' := by
+    intro v hv; simp only [P, dif_pos hv]; exact (hmin v hv).choose_spec.2
+  obtain ⟨code, hcode⟩ := Countable.exists_injective_nat ι
+  let S : ι → ProbSpace := fun v ↦ (P v).shift (code v)
+  have hSdisj : ∀ {i j : ι}, i ≠ j → Disjoint (S i).support (S j).support :=
+    fun hij ↦ ProbSpace.disjoint_support_shift _ _ (hcode.ne hij)
+  have hSdom : ∀ v, (S v).dom = V := hPdom
+  refine ⟨ProbSpace.sum ξ S V hSdisj hSdom, rfl, fun 𝓠' ↦ ⟨fun hle ↦ ?_, ?_⟩⟩
+  · refine ⟨S, V, hSdisj, hSdom, hle, fun v hv ↦ ?_⟩
+    exact (hPmin v hv (S v)).mp (ProbSpace.le_shift _ _)
+  · rintro ⟨𝓡', W', hdisj', hdom', hsum', hφ'⟩
+    have hVW : V ⊆ W' := by
+      rw [← hPdom v₀, ← hdom' v₀]
+      exact ProbSpace.dom_mono ((hPmin v₀ hv₀ _).mpr (hφ' v₀ hv₀))
+    refine (ProbSpace.sum_mono hSdisj hdisj' hSdom hdom' hVW fun v hv ↦ ?_).trans hsum'
+    exact (ProbSpace.shift_le _ _).trans ((hPmin v (PMF.mem_support_iff _ _ |>.mpr hv) _).mpr
+      (hφ' v (PMF.mem_support_iff _ _ |>.mpr hv)))
 
 end Precise
 

@@ -177,9 +177,10 @@ lemma guard_true :
   exact MProp.upClose_of ⟨by rw [h]; rfl, by rw [h]; rfl⟩
 
 /-- `φ₀` is precise. -/
-lemma phi0_precise : phi0.Precise := Precise.oplus fun _ _ ↦
-  Precise.sure ((MProp.Footprint.var_equals_literal _ _).and
-    (MProp.Footprint.var_equals_literal _ _)) ((Set.finite_singleton _).union (Set.finite_singleton _))
+lemma phi0_precise : phi0.Precise := (Precise.oplusDom fun _ _ ↦
+  Precise.sureDom ((MProp.Footprint.var_equals_literal _ _).and
+    (MProp.Footprint.var_equals_literal _ _))
+    ((Set.finite_singleton _).union (Set.finite_singleton _))).precise
 
 /-- After the loop, `x` is a fair coin flip. -/
 lemma phi0_fair : phi0 ⊢ ($"x") ~ Bern 0.5 :=

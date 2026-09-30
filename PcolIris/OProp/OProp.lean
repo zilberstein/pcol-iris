@@ -227,6 +227,15 @@ models of `φ` are exactly the spaces above some space `𝓟`. -/
 def Precise (φ : OProp) : Prop :=
   ∀ 𝓠, φ 𝓠 → ∃ 𝓟 : ProbSpace, ∀ 𝓠', 𝓟 ≤ 𝓠' ↔ φ 𝓠'
 
+/-- Precision where the least model owns exactly the variables `V`.  This is what the
+precision rule for outcome conjunctions needs, since the summands of a sum own the same
+variables. -/
+def PreciseDom (φ : OProp) (V : Set Var) : Prop :=
+  ∀ 𝓠, φ 𝓠 → ∃ 𝓟 : ProbSpace, 𝓟.dom = V ∧ ∀ 𝓠', 𝓟 ≤ 𝓠' ↔ φ 𝓠'
+
+lemma PreciseDom.precise {φ : OProp} {V : Set Var} (h : φ.PreciseDom V) : φ.Precise :=
+  fun 𝓠 hφ ↦ let ⟨𝓟, _, h𝓟⟩ := h 𝓠 hφ; ⟨𝓟, h𝓟⟩
+
 /-- The outcome conjunction `⨁[ξ] φ`: the space is (at least) a `ξ`-weighted sum of spaces
 satisfying the `φ v`.  The index type is countable, so that the summands can always be given
 disjoint sets of outcomes. -/
