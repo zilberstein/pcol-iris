@@ -9,6 +9,7 @@ import PcolIris.OProp.OProp
 import PcolIris.OProp.ProductLaws
 import PcolIris.Semantics.Invariant
 import PcolIris.OProp.Laws
+import PcolIris.OProp.Refines
 
 namespace Pcol
 
@@ -21,10 +22,6 @@ lemma Inv.footprint (𝓘 : Inv) : 𝓘.to_MProp.Footprint 𝓘.dom := by
   have := 𝓘.dom_valid h
   rw [Mem.restrict_dom] at this
   exact Set.inter_eq_right.mp this
-
-/-- Every memory that `ν` gives positive probability owns the variables `D`. -/
-def Distr.Owns (ν : Distr Mem) (D : Set Var) : Prop :=
-  ∀ m : Mem, ν (m : WithBot Mem) ≠ 0 → D ⊆ m.dom
 
 /-- A run from `μ` to `ν` does not deallocate variables. -/
 def Distr.Keeps (μ ν : Distr Mem) : Prop :=
