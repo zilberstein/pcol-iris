@@ -104,8 +104,8 @@ distinguishable.
 
 In `BoundedRank` (`wp_bounded_rank`), the second branch of the premise's postcondition allows
 any rank, not only ranks at least `N`. This makes the rule stronger, and it remains sound,
-since from any rank the loop exits with probability at least `p ^ (h - ℓ)`. The rule is
-stated for every class of frames `F`; the strong triple follows with `wp_strengthen`, since
+since from any rank the loop exits with probability at least `p ^ (h - ℓ)`. As in the paper,
+the rule is stated for weak triples; the strong triple follows with `wp_strengthen`, since
 the postcondition is precise.
 
 ## Precision
