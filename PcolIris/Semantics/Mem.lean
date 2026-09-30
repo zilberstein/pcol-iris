@@ -294,6 +294,15 @@ lemma le_union_right (hd : Disjoint σ.dom τ.dom) : τ ≤ (σ ⊎ τ) := by
   rw [union_comm hd]
   exact le_union_left τ σ
 
+/-- Putting a restriction of a memory in front of the memory itself does not change it. -/
+lemma union_restrict_self (σ : Mem) (X : Set Var) : (σ.restrict X ⊎ σ) = σ := by
+  funext x
+  by_cases hx : x ∈ (σ.restrict X).dom
+  · rw [union_apply_of_mem_dom hx]
+    have hX : x ∈ X := dom_restrict_subset σ X hx
+    exact restrict_apply_of_mem σ hX
+  · exact union_apply_of_notMem_dom hx
+
 end Mem
 
 end Pcol
