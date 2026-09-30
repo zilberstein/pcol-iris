@@ -367,6 +367,17 @@ lemma restrict_extend_of_notMem {σ : Mem} {x : Var} {X : Set Var} (v : Val) (h 
       extend_apply_of_ne v (fun (hc : x = y) ↦ h (hc ▸ hy))]
   · rw [restrict_apply_of_notMem _ hy, restrict_apply_of_notMem _ hy]
 
+/-- Forgetting a variable and assigning it its old value gives back the memory. -/
+lemma extend_restrict_sdiff {σ : Mem} {x : Var} {v : Val} (h : σ x = some v) :
+    (σ.restrict (σ.dom \ {x})).extend x v = σ := by
+  funext y
+  by_cases hxy : x = y
+  · subst hxy; rw [extend_apply_self, h]
+  · rw [extend_apply_of_ne v hxy]
+    by_cases hy : y ∈ σ.dom
+    · exact restrict_apply_of_mem _ ⟨hy, Ne.symm hxy⟩
+    · rw [restrict_apply_of_notMem _ (fun h' ↦ hy h'.1), notMem_dom_iff.mp hy]
+
 /-- A memory below `m` stays below `τ ⊎ m` if `τ` does not overwrite it. -/
 lemma le_union_of_le {σ τ m : Mem} (h : σ ≤ m) (hd : Disjoint τ.dom σ.dom) : σ ≤ (τ ⊎ m) := by
   rw [le_iff] at h ⊢
