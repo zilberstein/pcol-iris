@@ -72,8 +72,8 @@ lemma inv_of_y_eq (v : Val) (hv : v = 0 ∨ v = 1) :
 
 /-- The postcondition `ψ` is precise: it is a probabilistic sum of the (precise)
 assertions `⌈$"z" == v⌉`. -/
-lemma ψ_precise : ψ.Precise := Precise.oplus fun _ _ ↦
-  Precise.sure (MProp.Footprint.var_equals_literal _ _) (Set.finite_singleton _)
+lemma ψ_precise : ψ.Precise := (Precise.oplusDom fun _ _ ↦
+  Precise.sureDom (MProp.Footprint.var_equals_literal _ _) (Set.finite_singleton _)).precise
 
 /-- The unit of the separating conjunction is precise. -/
 lemma emp_precise : (Iris.BI.BIBase.emp : OProp).Precise :=
