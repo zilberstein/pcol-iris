@@ -314,6 +314,13 @@ lemma union_restrict_of_subset {τ : Mem} (hτ : τ.dom ⊆ X) (σ : Mem) :
     · rw [restrict_apply_of_mem _ hx, restrict_apply_of_mem _ hx, union_apply_of_notMem_dom hτx]
     · rw [restrict_apply_of_notMem _ hx, restrict_apply_of_notMem _ hx]
 
+lemma restrict_le (σ : Mem) (X : Set Var) : σ.restrict X ≤ σ := by
+  rw [le_iff]
+  intro x v hx
+  by_cases h : x ∈ X
+  · rwa [restrict_apply_of_mem _ h] at hx
+  · rw [restrict_apply_of_notMem _ h] at hx; exact absurd hx (by simp)
+
 end Mem
 
 end Pcol
