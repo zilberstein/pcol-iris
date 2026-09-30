@@ -303,6 +303,17 @@ lemma union_restrict_self (σ : Mem) (X : Set Var) : (σ.restrict X ⊎ σ) = σ
     exact restrict_apply_of_mem σ hX
   · exact union_apply_of_notMem_dom hx
 
+/-- Restricting commutes with overwriting by a memory that lives inside the restriction. -/
+lemma union_restrict_of_subset {τ : Mem} (hτ : τ.dom ⊆ X) (σ : Mem) :
+    (τ ⊎ σ.restrict X) = (τ ⊎ σ).restrict X := by
+  funext x
+  by_cases hτx : x ∈ τ.dom
+  · rw [union_apply_of_mem_dom hτx, restrict_apply_of_mem _ (hτ hτx), union_apply_of_mem_dom hτx]
+  · rw [union_apply_of_notMem_dom hτx]
+    by_cases hx : x ∈ X
+    · rw [restrict_apply_of_mem _ hx, restrict_apply_of_mem _ hx, union_apply_of_notMem_dom hτx]
+    · rw [restrict_apply_of_notMem _ hx, restrict_apply_of_notMem _ hx]
+
 end Mem
 
 end Pcol
