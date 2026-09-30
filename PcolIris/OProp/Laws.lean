@@ -55,6 +55,69 @@ lemma state_le_product_right {p q : ProbSpace} (hdisj : Disjoint p.dom q.dom) (n
 
 end ProbSpace
 
+namespace MProp
+
+/-- The pure assertion `P` only talks about the variables `V`: it requires them to be
+allocated, and only depends on their values. -/
+def Footprint (P : MProp) (V : Set Var) : Prop :=
+  ∀ σ, P σ ↔ V ⊆ σ.dom ∧ P (σ.restrict V)
+
+namespace Footprint
+
+lemma emp : (Iris.BI.BIBase.emp : MProp).Footprint ∅ :=
+  fun _ ↦ ⟨fun _ ↦ ⟨Set.empty_subset _, trivial⟩, fun _ ↦ trivial⟩
+
+lemma var_equals_literal (x : Var) (v : Val) : ($ x == Expr.literal v).Footprint {x} := by
+  intro σ
+  rw [Expr.var_equals_literal_iff, Expr.var_equals_literal_iff,
+    Mem.restrict_apply_of_mem _ (Set.mem_singleton x)]
+  exact ⟨fun h ↦ ⟨Set.singleton_subset_iff.mpr (Mem.mem_dom_of_eq_some h), h⟩, fun h ↦ h.2⟩
+
+lemma own_var (x : Var) : (own ($ x)).Footprint {x} := by
+  intro σ
+  rw [own_var_iff, own_var_iff, Mem.restrict_apply_of_mem _ (Set.mem_singleton x)]
+  refine ⟨fun h ↦ ⟨Set.singleton_subset_iff.mpr ?_, h⟩, fun h ↦ h.2⟩
+  exact Mem.mem_dom_iff.mpr (Option.isSome_iff_ne_none.mp h)
+
+/-- An equation between an expression and a literal only talks about the variables that the
+expression reads. -/
+lemma equals_literal {e : Expr} {V : Set Var} (hmono : Expr.Mono e)
+    (hread : ∀ σ, e σ = e (σ.restrict V)) (hdef : ∀ σ, (e σ).isSome → V ⊆ σ.dom) (c : Val) :
+    (e == Expr.literal c).Footprint V := by
+  intro σ
+  rw [Expr.equals_iff hmono (Expr.literal_mono c), Expr.equals_iff hmono (Expr.literal_mono c),
+    ← hread σ]
+  exact ⟨fun h ↦ ⟨hdef σ h.1, h⟩, fun h ↦ h.2⟩
+
+lemma sep {P Q : MProp} {V W : Set Var} (hP : P.Footprint V) (hQ : Q.Footprint W)
+    (hVW : Disjoint V W) : iprop(P ∗ Q).Footprint (V ∪ W) := by
+  intro σ
+  constructor
+  · rintro ⟨σ₁, σ₂, hd, hle, h₁, h₂⟩
+    have hP' : P σ := P.upcl ((Mem.le_union_left σ₁ σ₂).trans hle) h₁
+    have hQ' : Q σ := Q.upcl ((Mem.le_union_right hd).trans hle) h₂
+    refine ⟨Set.union_subset ((hP σ).mp hP').1 ((hQ σ).mp hQ').1,
+      σ.restrict V, σ.restrict W, ?_, ?_, ((hP σ).mp hP').2, ((hQ σ).mp hQ').2⟩
+    · exact hVW.mono (Mem.dom_restrict_subset σ V) (Mem.dom_restrict_subset σ W)
+    · rw [Mem.restrict_union_restrict]
+  · rintro ⟨-, h⟩
+    exact iprop(P ∗ Q).upcl (Mem.restrict_le σ (V ∪ W)) h
+
+lemma and {P Q : MProp} {V W : Set Var} (hP : P.Footprint V) (hQ : Q.Footprint W) :
+    iprop(P ∧ Q).Footprint (V ∪ W) := by
+  intro σ
+  change P σ ∧ Q σ ↔ V ∪ W ⊆ σ.dom ∧ (P (σ.restrict (V ∪ W)) ∧ Q (σ.restrict (V ∪ W)))
+  rw [hP σ, hQ σ, hP (σ.restrict (V ∪ W)), hQ (σ.restrict (V ∪ W)), Mem.restrict_restrict,
+    Mem.restrict_restrict, Mem.restrict_dom,
+    Set.inter_eq_right.mpr (Set.subset_union_left : V ⊆ V ∪ W),
+    Set.inter_eq_right.mpr (Set.subset_union_right : W ⊆ V ∪ W)]
+  simp only [Set.union_subset_iff, Set.subset_inter_iff]
+  tauto
+
+end Footprint
+
+end MProp
+
 namespace OProp
 
 /--
@@ -83,11 +146,37 @@ lemma sure_sep_intro {P Q : MProp} : iprop(⌈P⌉ ∗ ⌈Q⌉) ⊢ ⌈ iprop(P 
   · have := hg.state n hn
     rwa [ProbSpace.product_state] at this
 
-lemma sure_sep {P Q : MProp} :
-    ⌈ iprop(P ∗ Q) ⌉ ⊣⊢ ⌈P⌉ ∗ ⌈Q⌉ := by
-  constructor
-  · intro 𝓟 hsure; sorry
-  · exact sure_sep_intro
+/-- A certainty about a separating conjunction can be split into independent certainties, when
+the two assertions talk about fixed sets of variables: the two parts are the spaces without
+probabilistic information over those variables. -/
+lemma sure_sep_elim {P Q : MProp} {V W : Set Var} (hP : P.Footprint V) (hQ : Q.Footprint W) :
+    ⌈ iprop(P ∗ Q) ⌉ ⊢ iprop(⌈P⌉ ∗ ⌈Q⌉) := by
+  intro 𝓟 h
+  -- The components of a memory satisfying `P ∗ Q` satisfy `P` and `Q`
+  have hsplit : ∀ k ∈ 𝓟.support, P (𝓟.state k) ∧ Q (𝓟.state k) := by
+    intro k hk
+    obtain ⟨σ₁, σ₂, hd, hle, h₁, h₂⟩ := h hk
+    exact ⟨P.upcl ((Mem.le_union_left σ₁ σ₂).trans hle) h₁,
+      Q.upcl ((Mem.le_union_right hd).trans hle) h₂⟩
+  obtain ⟨k₀, hk₀⟩ := ProbSpace.support_nonempty 𝓟
+  obtain ⟨σ₁, σ₂, hd, hle, h₁, h₂⟩ := h hk₀
+  have hV : V ⊆ 𝓟.dom := by
+    rw [← 𝓟.dom_valid k₀]; exact ((hP _).mp (hsplit k₀ hk₀).1).1
+  have hW : W ⊆ 𝓟.dom := by
+    rw [← 𝓟.dom_valid k₀]; exact ((hQ _).mp (hsplit k₀ hk₀).2).1
+  have hVW : Disjoint V W := hd.mono ((hP _).mp h₁).1 ((hQ _).mp h₂).1
+  refine ⟨ProbSpace.forget 𝓟 V hV, ProbSpace.forget 𝓟 W hW, hVW,
+    ProbSpace.product_forget_le (ProbSpace.forget_le 𝓟 hV) hW, fun k _ ↦ ?_, fun k _ ↦ ?_⟩
+  · obtain ⟨k', hk', heq⟩ := ProbSpace.forget_state_restrict 𝓟 hV k
+    change P ((ProbSpace.forget 𝓟 V hV).state k)
+    rw [heq]; exact ((hP _).mp (hsplit k' hk').1).2
+  · obtain ⟨k', hk', heq⟩ := ProbSpace.forget_state_restrict 𝓟 hW k
+    change Q ((ProbSpace.forget 𝓟 W hW).state k)
+    rw [heq]; exact ((hQ _).mp (hsplit k' hk').2).2
+
+lemma sure_sep {P Q : MProp} {V W : Set Var} (hP : P.Footprint V) (hQ : Q.Footprint W) :
+    ⌈ iprop(P ∗ Q) ⌉ ⊣⊢ ⌈P⌉ ∗ ⌈Q⌉ :=
+  ⟨sure_sep_elim hP hQ, sure_sep_intro⟩
 
 /-- A frame can be pushed into the branches of an outcome conjunction. -/
 lemma oplus_distrib {ι : Type} [Countable ι] (ξ : PMF ι) (φ : ι → OProp) (ψ : OProp) :
@@ -173,54 +262,6 @@ lemma oplus_reindex {ι : Type} [Countable ι] {ξ : PMF ι} (e : ι ≃ ι) (h�
 
 end OProp
 
-namespace MProp
-
-/-- The pure assertion `P` only talks about the variables `V`: it requires them to be
-allocated, and only depends on their values. -/
-def Footprint (P : MProp) (V : Set Var) : Prop :=
-  ∀ σ, P σ ↔ V ⊆ σ.dom ∧ P (σ.restrict V)
-
-namespace Footprint
-
-lemma emp : (Iris.BI.BIBase.emp : MProp).Footprint ∅ :=
-  fun _ ↦ ⟨fun _ ↦ ⟨Set.empty_subset _, trivial⟩, fun _ ↦ trivial⟩
-
-lemma var_equals_literal (x : Var) (v : Val) : ($ x == Expr.literal v).Footprint {x} := by
-  intro σ
-  rw [Expr.var_equals_literal_iff, Expr.var_equals_literal_iff,
-    Mem.restrict_apply_of_mem _ (Set.mem_singleton x)]
-  exact ⟨fun h ↦ ⟨Set.singleton_subset_iff.mpr (Mem.mem_dom_of_eq_some h), h⟩, fun h ↦ h.2⟩
-
-lemma own_var (x : Var) : (own ($ x)).Footprint {x} := by
-  intro σ
-  rw [own_var_iff, own_var_iff, Mem.restrict_apply_of_mem _ (Set.mem_singleton x)]
-  refine ⟨fun h ↦ ⟨Set.singleton_subset_iff.mpr ?_, h⟩, fun h ↦ h.2⟩
-  exact Mem.mem_dom_iff.mpr (Option.isSome_iff_ne_none.mp h)
-
-/-- An equation between an expression and a literal only talks about the variables that the
-expression reads. -/
-lemma equals_literal {e : Expr} {V : Set Var} (hmono : Expr.Mono e)
-    (hread : ∀ σ, e σ = e (σ.restrict V)) (hdef : ∀ σ, (e σ).isSome → V ⊆ σ.dom) (c : Val) :
-    (e == Expr.literal c).Footprint V := by
-  intro σ
-  rw [Expr.equals_iff hmono (Expr.literal_mono c), Expr.equals_iff hmono (Expr.literal_mono c),
-    ← hread σ]
-  exact ⟨fun h ↦ ⟨hdef σ h.1, h⟩, fun h ↦ h.2⟩
-
-lemma and {P Q : MProp} {V W : Set Var} (hP : P.Footprint V) (hQ : Q.Footprint W) :
-    iprop(P ∧ Q).Footprint (V ∪ W) := by
-  intro σ
-  change P σ ∧ Q σ ↔ V ∪ W ⊆ σ.dom ∧ (P (σ.restrict (V ∪ W)) ∧ Q (σ.restrict (V ∪ W)))
-  rw [hP σ, hQ σ, hP (σ.restrict (V ∪ W)), hQ (σ.restrict (V ∪ W)), Mem.restrict_restrict,
-    Mem.restrict_restrict, Mem.restrict_dom,
-    Set.inter_eq_right.mpr (Set.subset_union_left : V ⊆ V ∪ W),
-    Set.inter_eq_right.mpr (Set.subset_union_right : W ⊆ V ∪ W)]
-  simp only [Set.union_subset_iff, Set.subset_inter_iff]
-  tauto
-
-end Footprint
-
-end MProp
 
 namespace Precise
 

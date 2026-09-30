@@ -64,6 +64,88 @@ lemma trivialOn_le {𝓠 : ProbSpace} (hdom : V ⊆ 𝓠.dom) (g : ℕ → ℕ)
     · rw [Set.preimage_empty, measure_empty, measure_empty]
     · rw [Set.preimage_univ, measure_univ, measure_univ]
 
+/-! ### Independence of spaces without probabilistic information -/
+
+/-- A space without probabilistic information is independent of every other space: if `X` is
+below `Z`, and the memories of `T` are (almost surely) restrictions of those of `Z` to other
+variables, then `X ⊗ T` is below `Z`. -/
+theorem product_trivialOn_le {X Z : ProbSpace} (hX : X ≤ Z) (hU : V ⊆ Z.dom) (t : ℕ → ℕ)
+    (ht : ∀ k ∈ Z.support, f (t k) ≤ Z.state k) : (X ⊗ trivialOn V f hf) ≤ Z := by
+  obtain ⟨g, hg⟩ := hX
+  haveI := isProbabilityMeasure_meas X
+  haveI := isProbabilityMeasure_meas (trivialOn V f hf)
+  have hgm : @Measurable ℕ ℕ Z.mspace X.mspace g := fun E hE ↦ hg.mspace E hE
+  have htm : @Measurable ℕ ℕ Z.mspace (trivialOn V f hf).mspace t := by
+    intro s hs
+    rcases trivialOn_measurableSet hs with rfl | rfl
+    · exact Z.mspace.measurableSet_empty
+    · exact @MeasurableSet.univ ℕ Z.mspace
+  have hmeas : @Measurable ℕ (ℕ × ℕ) Z.mspace (X.mspace.prod (trivialOn V f hf).mspace)
+      (fun k ↦ (g k, t k)) :=
+    @Measurable.prodMk ℕ Z.mspace ℕ ℕ X.mspace (trivialOn V f hf).mspace g t hgm htm
+  have hmap : MP Z.mspace (X.mspace.prod (trivialOn V f hf).mspace) (fun k ↦ (g k, t k))
+      Z.meas (@Measure.prod ℕ ℕ X.mspace (trivialOn V f hf).mspace X.meas
+        (trivialOn V f hf).meas) := by
+    refine @MeasurePreserving.mk ℕ (ℕ × ℕ) Z.mspace (X.mspace.prod (trivialOn V f hf).mspace)
+      _ _ _ hmeas ?_
+    symm
+    refine @ext_of_generate_finite _ (X.mspace.prod (trivialOn V f hf).mspace) _ _
+      (Set.image2 (fun x1 x2 ↦ x1 ×ˢ x2) {s | @MeasurableSet ℕ X.mspace s}
+        {t | @MeasurableSet ℕ (trivialOn V f hf).mspace t})
+      (@generateFrom_prod ℕ ℕ X.mspace (trivialOn V f hf).mspace).symm
+      (@isPiSystem_prod ℕ ℕ X.mspace (trivialOn V f hf).mspace) inferInstance ?_ ?_
+    · rintro _ ⟨A, hA, B, hB, rfl⟩
+      rw [@Measure.map_apply ℕ (ℕ × ℕ) Z.mspace (X.mspace.prod (trivialOn V f hf).mspace)
+        Z.meas _ hmeas _ (@MeasurableSet.prod ℕ ℕ X.mspace (trivialOn V f hf).mspace A B hA hB),
+        @Measure.prod_prod ℕ ℕ X.mspace (trivialOn V f hf).mspace X.meas _ _ A B]
+      rcases trivialOn_measurableSet (V := V) (f := f) (hf := hf) hB with rfl | rfl
+      · simp
+      · rw [measure_univ, mul_one, Set.mk_preimage_prod, Set.preimage_univ, Set.inter_univ]
+        exact (hg.measurePreserving.measure_preimage
+          (@MeasurableSet.nullMeasurableSet ℕ X.mspace X.meas A hA)).symm
+    · rw [@Measure.map_apply ℕ (ℕ × ℕ) Z.mspace (X.mspace.prod (trivialOn V f hf).mspace)
+        Z.meas _ hmeas _ MeasurableSet.univ, Set.preimage_univ, measure_univ, measure_univ]
+  refine ⟨fun k ↦ Nat.pairEquiv (g k, t k),
+    relabels_of_measurePreserving (IsCompletionOf.product X (trivialOn V f hf))
+      ((measurePreserving_pair X _).comp hmap) (Set.union_subset hg.dom hU) ?_⟩
+  intro k hk
+  rw [product_state, Equiv.symm_apply_apply]
+  exact Mem.union_le (hg.state k hk) (ht k hk)
+
+/-- The part of `Z` over the variables `U`, forgetting all probabilistic information: its
+memories are the (possible) memories of `Z`, restricted to `U`. -/
+noncomputable def forget (Z : ProbSpace) (U : Set Var) (hU : U ⊆ Z.dom) : ProbSpace :=
+  open Classical in
+  trivialOn U
+    (fun k ↦ (Z.state (if k ∈ Z.support then k else (support_nonempty Z).some)).restrict U)
+    (fun k ↦ by rw [Mem.restrict_dom, Z.dom_valid]; exact Set.inter_eq_right.mpr hU)
+
+lemma forget_state_restrict (Z : ProbSpace) {U : Set Var} (hU : U ⊆ Z.dom) (k : ℕ) :
+    ∃ k' ∈ Z.support, (forget Z U hU).state k = (Z.state k').restrict U := by
+  classical
+  by_cases hk : k ∈ Z.support
+  · exact ⟨k, hk, by simp only [forget, trivialOn, if_pos hk]⟩
+  · exact ⟨_, (support_nonempty Z).some_mem, by simp only [forget, trivialOn, if_neg hk]⟩
+
+lemma forget_state_of_mem (Z : ProbSpace) {U : Set Var} (hU : U ⊆ Z.dom) {k : ℕ}
+    (hk : k ∈ Z.support) : (forget Z U hU).state k = (Z.state k).restrict U := by
+  classical
+  simp only [forget, trivialOn, if_pos hk]
+
+lemma support_forget (Z : ProbSpace) {U : Set Var} (hU : U ⊆ Z.dom) :
+    (forget Z U hU).support = Set.univ := support_trivialOn
+
+lemma forget_le (Z : ProbSpace) {U : Set Var} (hU : U ⊆ Z.dom) : forget Z U hU ≤ Z :=
+  trivialOn_le hU id fun k hk ↦ by
+    change (forget Z U hU).state k ≤ _
+    rw [forget_state_of_mem Z hU hk]; exact Mem.restrict_le _ _
+
+lemma product_forget_le {X Z : ProbSpace} (hX : X ≤ Z) {U : Set Var} (hU : U ⊆ Z.dom) :
+    (X ⊗ forget Z U hU) ≤ Z :=
+  product_trivialOn_le hX hU id fun k hk ↦ by
+    change (forget Z U hU).state k ≤ _
+    rw [forget_state_of_mem Z hU hk]; exact Mem.restrict_le _ _
+
 end ProbSpace
 
 end Pcol
