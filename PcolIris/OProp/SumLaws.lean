@@ -79,6 +79,16 @@ lemma disjoint_support_shift (p q : ProbSpace) {c c' : ℕ} (h : c ≠ c') :
   obtain ⟨n', hn'⟩ := support_shift_subset q c' hm'
   exact h (congrArg Prod.fst (Nat.pairEquiv.injective hn')).symm
 
+/-- Products whose right factors have disjoint supports have disjoint supports. -/
+lemma disjoint_support_product_right {p p' q q' : ProbSpace}
+    (hd : Disjoint q.support q'.support) : Disjoint (p ⊗ q).support (p' ⊗ q').support := by
+  rw [support_product, support_product, Set.disjoint_left]
+  rintro _ ⟨⟨i, j⟩, ⟨-, hj⟩, rfl⟩ ⟨⟨i', j'⟩, ⟨-, hj'⟩, heq⟩
+  have := congrArg Prod.snd (Nat.pairEquiv.injective heq)
+  simp only at this
+  subst this
+  exact Set.disjoint_left.mp hd hj hj'
+
 /-- Products of spaces with disjoint supports have disjoint supports. -/
 lemma disjoint_support_product' {p p' q q' : ProbSpace} (hd : Disjoint p.support p'.support) :
     Disjoint (p ⊗ q).support (p' ⊗ q').support := by
