@@ -6,6 +6,29 @@ namespace Pcol
 
 namespace ProbSpace
 
+/-- The distributive law of products over sums, as a pair of inequalities. -/
+lemma sumProd_le_sum_product {ι : Type} (ξ : PMF ι) (𝓟 : ι → ProbSpace) (𝓠 : ProbSpace)
+    (V : Set Var) (h : ∀ {i j : ι}, i ≠ j → Disjoint (𝓟 i).support (𝓟 j).support)
+    (hdom : ∀ i : ι, (𝓟 i).dom = V) :
+    sumProd ξ 𝓟 𝓠 V h hdom ≤ (sum ξ 𝓟 V h hdom ⊗ 𝓠) := by
+  obtain ⟨hms, hmeas, hd, hsupp, hst⟩ := sum_prod_distribute ξ 𝓟 𝓠 V h hdom
+  refine le_of_id (fun E hE ↦ hms ▸ hE) (fun E _ ↦ ?_) hd.symm.subset
+    (fun k hk ↦ le_of_eq (hst k hk).symm)
+  refine ENNReal.coe_injective ?_
+  rw [prob_coe, prob_coe]
+  exact (hmeas E).symm
+
+lemma sum_product_le_sumProd {ι : Type} (ξ : PMF ι) (𝓟 : ι → ProbSpace) (𝓠 : ProbSpace)
+    (V : Set Var) (h : ∀ {i j : ι}, i ≠ j → Disjoint (𝓟 i).support (𝓟 j).support)
+    (hdom : ∀ i : ι, (𝓟 i).dom = V) :
+    (sum ξ 𝓟 V h hdom ⊗ 𝓠) ≤ sumProd ξ 𝓟 𝓠 V h hdom := by
+  obtain ⟨hms, hmeas, hd, hsupp, hst⟩ := sum_prod_distribute ξ 𝓟 𝓠 V h hdom
+  refine le_of_id (fun E hE ↦ hms.symm ▸ hE) (fun E _ ↦ ?_) hd.subset
+    (fun k hk ↦ le_of_eq (hst k (hsupp ▸ hk)))
+  refine ENNReal.coe_injective ?_
+  rw [prob_coe, prob_coe]
+  exact hmeas E
+
 /-- The left factor of a product is contained in the product state. -/
 lemma state_le_product_left (p q : ProbSpace) (n : ℕ) :
     p.state (Nat.pairEquiv.symm n).1 ≤ (p ⊗ q).state n := by
@@ -49,15 +72,31 @@ lemma sure_weaken {P Q : MProp} (h : P ⊢ Q) : ⌈P⌉ ⊢ ⌈Q⌉ := by
   intro 𝓟 hP i hi; apply Set.mem_preimage.mpr
   exact hP hi |> Set.mem_preimage.mp |> h _
 
+/-- Two separately owned certainties give a certainty about their separating conjunction. -/
+lemma sure_sep_intro {P Q : MProp} : iprop(⌈P⌉ ∗ ⌈Q⌉) ⊢ ⌈ iprop(P ∗ Q) ⌉ := by
+  rintro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, ⟨g, hg⟩, hP, hQ⟩ n hn
+  obtain ⟨h1, h2⟩ := ProbSpace.mem_support_product_iff.mp (hg.mem_support hn)
+  refine ⟨_, _, ?_, ?_, hP h1, hQ h2⟩
+  · rw [𝓟₁.dom_valid, 𝓟₂.dom_valid]; exact hdisj
+  · have := hg.state n hn
+    rwa [ProbSpace.product_state] at this
+
 lemma sure_sep {P Q : MProp} :
     ⌈ iprop(P ∗ Q) ⌉ ⊣⊢ ⌈P⌉ ∗ ⌈Q⌉ := by
   constructor
   · intro 𝓟 hsure; sorry
-  · intro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, hP, hQ⟩ k hk
-    sorry
+  · exact sure_sep_intro
 
+/-- A frame can be pushed into the branches of an outcome conjunction. -/
 lemma oplus_distrib {ι : Type} (ξ : PMF ι) (φ : ι → OProp) (ψ : OProp) :
-    (⨁[ ξ ] φ) ∗ ψ ⊢ ⨁[ ξ ] fun v ↦ iprop(φ v ∗ ψ) := sorry
+    (⨁[ ξ ] φ) ∗ ψ ⊢ ⨁[ ξ ] fun v ↦ iprop(φ v ∗ ψ) := by
+  rintro 𝓟 ⟨m₁, m₂, hd, hle, ⟨𝓠, V, hdsj, hdom, hsum, hφ⟩, hψ⟩
+  have hV : V ⊆ m₁.dom := ProbSpace.dom_mono hsum
+  refine ⟨fun v ↦ 𝓠 v ⊗ m₂, V ∪ m₂.dom, ProbSpace.sum_prod_disjoint m₂ hdsj,
+    ProbSpace.sum_prod_dom m₂ hdom, ?_, fun v hv ↦ ?_⟩
+  · exact (ProbSpace.sumProd_le_sum_product ξ 𝓠 m₂ V hdsj hdom).trans
+      ((ProbSpace.product_mono_left hsum hd).trans hle)
+  · exact ⟨𝓠 v, m₂, (hdom v).symm ▸ hd.mono_left hV, le_refl _, hφ v hv, hψ⟩
 
 lemma oplus_distrib' {ι : Type} (ξ : PMF ι) (φ : ι → OProp) (ψ : OProp) (h : ψ.Precise) :
     (⨁[ ξ ] fun v ↦ iprop(φ v ∗ ψ)) ⊢ (⨁[ ξ ] φ) ∗ ψ := by
