@@ -59,6 +59,10 @@ Following Iris, specifications are stated with a weakest-precondition predicate
 that the initial and final distributions refine (`Framed`): the part of the state that
 satisfies the invariant is any space `𝓙` with `⌈I⌉ 𝓙`, as in `P ⊨ φ ∗ ⌈I⌉`.
 
+The postcondition space may own no variables beyond those of the precondition space
+(`𝓠.dom ⊆ 𝓟.dom`). In the paper this is implicit, since a program runs on a fixed memory
+footprint; here it is what makes the postconditions of two parallel threads independent.
+
 ## Invariants
 
 Invariants are ordered by factorization (`Inv.LE_Inv`): `𝓘 ≤ 𝓙` when `𝓘` is `𝓙 ∗ 𝓚` for
