@@ -23,6 +23,8 @@ Consequences:
   disjoint sets of memories. The branches of a sum are therefore always distinguishable, and
   the partitioning side conditions of the paper (`ψ ⇒ ⌈e ↦ X⌉` in `Split1`, `NSplit1` and
   `Exists`, and in the precision rule for `⨁`) are not needed.
+- Outcome conjunctions `⨁[ξ] φ` and `& φ` range over countable index types, so that the
+  summands can always be given disjoint sets of outcomes.
 - The product `𝓟 ⊗ 𝓠` encodes pairs of outcomes with `Nat.pairEquiv`, so it is commutative
   and associative only up to relabeling. The order `𝓟 ≤ 𝓠` therefore allows a
   measure-preserving relabeling of the outcomes (`ProbSpace.Relabels`), and compares the
