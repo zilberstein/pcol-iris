@@ -599,6 +599,41 @@ lemma wp_assign_pres {𝓘 : Inv} {F : ProbSpace → Prop} (x : Var) (e : Expr) 
   exact ⟨hk, 𝓡 ⊗ 𝓟₂, T, hfT, (show 𝓟₁.dom ∪ 𝓟₂.dom ⊆ 𝓟.dom from ProbSpace.dom_mono hle),
     ψ.mono (ProbSpace.product_comm hd) (hwand 𝓡 hd.symm h𝓡)⟩
 
+/-- **The sampling rule that preserves the value of the parameter.**  This is to `wp_bern`
+what `wp_assign_pres` is to `wp_assign`: if writing to `x` cannot change the value of `e`,
+then the value of `e` is still known after the sampling, and it is independent of the sampled
+value. -/
+lemma wp_bern_pres {𝓘 : Inv} {F : ProbSpace → Prop} {ψ : OProp} (x : Var) (e : Expr) (v : Val)
+    (he : ∀ (σ : Mem) (w : Val), e (σ.extend x w) = e σ) (hmono : e.Mono) :
+    ⌈e == Expr.literal v ∧ own (Expr.var x)⌉ ∗
+        (((Expr.var x ~ Bern v) ∗ ⌈e == Expr.literal v⌉) -∗ ψ) ⊢
+      wp_base 𝓘 F (x :≈ PExpr.Bern e) ψ := by
+  rintro 𝓟 ⟨𝓟₁, 𝓟₂, hd, hle, hpre, hwand⟩ μ 𝓟fr 𝓙 _ hf ν hν
+  obtain ⟨hx, hk, T, hfT⟩ := bern_run hmono hd hpre (hf.mono hle) hν
+  set 𝓟₁' := 𝓟₁.restrictDom (𝓟₁.dom \ {x}) Set.sdiff_subset
+  set 𝓡 := 𝓟₁' ⊗ sampleSpace x (Bern v)
+  have h1'B : Disjoint 𝓟₁'.dom (sampleSpace x (Bern v)).dom := Set.disjoint_sdiff_left
+  have hsub : 𝓡.dom ⊆ 𝓟₁.dom :=
+    Set.union_subset Set.sdiff_subset (Set.singleton_subset_iff.mpr hx)
+  -- The value of `e` is still known, without `x`
+  have he' : OProp.sure iprop(e == Expr.literal v) 𝓟₁' := by
+    intro k hk
+    obtain ⟨σ', hσ', -, hσ'e⟩ := (hpre hk).1
+    have hval : e (𝓟₁.state k) = some v := hmono hσ' hσ'e
+    obtain ⟨w, hw⟩ := Option.isSome_iff_exists.mp (MProp.own_var_iff.mp (hpre hk).2)
+    have hrestr : e ((𝓟₁.state k).restrict (𝓟₁.dom \ {x})) = some v := by
+      rw [← he _ w, ← 𝓟₁.dom_valid k, Mem.extend_restrict_sdiff hw]
+      exact hval
+    change (e == Expr.literal v) ((𝓟₁.state k).restrict (𝓟₁.dom \ {x}))
+    exact MProp.upClose_of ⟨by rw [hrestr]; rfl, hrestr⟩
+  have h𝓡 : iprop((Expr.var x ~ Bern v) ∗ ⌈e == Expr.literal v⌉) 𝓡 :=
+    ⟨sampleSpace x (Bern v), 𝓟₁', h1'B.symm, ProbSpace.product_comm h1'B,
+      sampleSpace_distributed x _, he'⟩
+  exact ⟨hk, 𝓡 ⊗ 𝓟₂, T, hfT,
+    (Set.union_subset_union_left _ hsub).trans
+      (show 𝓟₁.dom ∪ 𝓟₂.dom ⊆ 𝓟.dom from ProbSpace.dom_mono hle),
+    ψ.mono (ProbSpace.product_comm (hd.mono_left hsub)) (hwand 𝓡 (hd.mono_left hsub).symm h𝓡)⟩
+
 /-- **Elimination of a nondeterministic choice in the precondition.**
 
 If the postcondition is precise, then it is enough to establish the weakest precondition in
