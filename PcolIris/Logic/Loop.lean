@@ -93,3 +93,36 @@ lemma minProb_while {e : Expr} {c : Cmd Act} {𝓘 : Inv} (μ : Distr Mem) (E : 
   change ConvexPowerset.minProb ((ConvexPowerset.singleton' μ).bind (ωSup cf)) E = _
   rw [← h, (ConvexPowerset.minProb_ωScottContinuous E).map_ωSup]
   rfl
+
+namespace ConvexPowerset
+
+/-- The divergent computation reaches no event. -/
+lemma minProb_bot {α : Type} (E : Set α) : ConvexPowerset.minProb (⊥ : ConvexPowerset α) E = 0 :=
+  le_antisymm ((iInf₂_le (PMF.pure ⊥) (Set.mem_univ _)).trans
+    (le_of_eq (ConvexPowerset.prob_bot_distr E))) bot_le
+
+open Classical in
+lemma apply_of_mem_pure {α : Type} {x : α} {μ : Distr α}
+    (h : μ ∈ (pure x : ConvexPowerset α)) (y : α) : μ (some y) = if y = x then 1 else 0 := by
+  rw [ConvexPowerset.mem_pure] at h; subst h
+  by_cases h : y = x
+  · subst h; rw [if_pos rfl]; exact PMF.pure_apply_self _
+  · rw [if_neg h]; exact PMF.pure_apply_of_ne _ _ fun h' ↦ h (Option.some_injective _ h')
+
+/-- A terminating deterministic computation reaches the events that contain its result. -/
+lemma minProb_pure {α : Type} (x : α) (E : Set α) [Decidable (x ∈ E)] :
+    ConvexPowerset.minProb (pure x : ConvexPowerset α) E = if x ∈ E then 1 else 0 := by
+  classical
+  have hval : ∀ μ ∈ (pure x : ConvexPowerset α),
+      ∑' y : E, μ (some (y : α)) = if x ∈ E then 1 else 0 := by
+    intro μ hμ
+    simp_rw [apply_of_mem_pure hμ]
+    split_ifs with h
+    · rw [tsum_eq_single (⟨x, h⟩ : E) fun y hy ↦ if_neg fun h' ↦ hy (Subtype.ext h')]
+      exact if_pos rfl
+    · exact ENNReal.tsum_eq_zero.mpr fun y ↦ if_neg fun (h' : (y : α) = x) ↦ h (h' ▸ y.2)
+  have hx : PMF.pure (some x) ∈ (pure x : ConvexPowerset α) := (ConvexPowerset.mem_pure x).mpr rfl
+  unfold ConvexPowerset.minProb
+  exact le_antisymm ((iInf₂_le _ hx).trans (hval _ hx).le) (le_iInf₂ fun μ hμ ↦ (hval μ hμ).ge)
+
+end ConvexPowerset
