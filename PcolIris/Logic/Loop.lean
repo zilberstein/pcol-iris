@@ -263,3 +263,179 @@ theorem minProb_while_eq_mul {e : Expr} {c : Cmd Act} {𝓘 : Inv}
   exact minProb_loopIter_eq_mul hq hInv hPost hPostE hPost1 hstep n μ hμ
 
 end D1
+
+section D3
+
+open _root_.ConvexPowerset
+
+variable {e : Expr} {f : Mem → ConvexPowerset Mem}
+
+lemma sum_some_le_one (μ : Distr Mem) : ∑' x : Mem, μ (some x) ≤ 1 := by
+  have := ENNReal.tsum_comp_le_tsum_of_injective (f := fun (x : Mem) ↦ (some x : WithBot Mem))
+    (Option.some_injective _) (fun w ↦ (μ : PMF (WithBot Mem)) w)
+  exact this.trans (le_of_eq (PMF.tsum_coe _))
+
+lemma minProb_le_one (s : ConvexPowerset Mem) (E : Set Mem) : minProb s E ≤ 1 := by
+  obtain ⟨μ, hμ⟩ := s.nonempty
+  refine (iInf₂_le μ hμ).trans ?_
+  exact (ENNReal.tsum_comp_le_tsum_of_injective (f := fun (x : E) ↦ (x : Mem))
+    Subtype.val_injective (fun x ↦ μ (some x))).trans (sum_some_le_one μ)
+
+lemma avgMin_le_one (g : Mem → ConvexPowerset Mem) (ν : Distr Mem) (E : Set Mem) :
+    avgMin g ν E ≤ 1 :=
+  (ENNReal.tsum_le_tsum fun _ ↦ mul_le_of_le_one_right' (minProb_le_one _ _)).trans
+    (sum_some_le_one ν)
+
+lemma avgMin_mix (g : Mem → ConvexPowerset Mem) {ν ν₁ ν₂ : Distr Mem} {t : ENNReal}
+    (hν : ∀ x, ν (some x) = t * ν₁ (some x) + (1 - t) * ν₂ (some x)) (E : Set Mem) :
+    avgMin g ν E = t * avgMin g ν₁ E + (1 - t) * avgMin g ν₂ E := by
+  unfold avgMin
+  simp_rw [hν, add_mul, mul_assoc]
+  rw [ENNReal.tsum_add, ENNReal.tsum_mul_left, ENNReal.tsum_mul_left]
+
+lemma avgMin_loopIter_zero (μ : Distr Mem) (E : Set Mem) :
+    avgMin (loopIter e f 0) μ E = 0 := by
+  simp [avgMin, loopIter_zero, Pcol.ConvexPowerset.minProb_bot]
+
+/-- From a terminated distribution, every nonempty unrolling terminates. -/
+lemma avgMin_loopIter_succ_post {ν : Distr Mem} (hν : ∀ x, ν (some x) ≠ 0 → e x = some 0)
+    (h1 : ∑' x : Mem, ν (some x) = 1) (n : ℕ) :
+    avgMin (loopIter e f (n + 1)) ν Set.univ = 1 := by
+  classical
+  rw [← h1]
+  refine tsum_congr fun x ↦ ?_
+  by_cases hx : ν (some x) = 0
+  · simp [hx]
+  · rw [minProb_loopIter_succ_of_false (hν x hx), if_pos (Set.mem_univ _), mul_one]
+
+/-- From a distribution where the guard holds, one more unrolling runs the body first. -/
+lemma avgMin_loopIter_succ_run {μ : Distr Mem} (hμ : ∀ x, μ (some x) ≠ 0 → e x = some 1)
+    (n : ℕ) (E : Set Mem) :
+    avgMin (loopIter e f (n + 1)) μ E =
+      ⨅ ν : {ν // ν ∈ singleton' μ >>= f}, avgMin (loopIter e f n) ν E := by
+  have : avgMin (loopIter e f (n + 1)) μ E =
+      minProb (singleton' μ >>= fun x ↦ f x >>= loopIter e f n) E := by
+    rw [Pcol.ConvexPowerset.minProb_singleton'_bind]
+    refine tsum_congr fun x ↦ ?_
+    by_cases hx : μ (some x) = 0
+    · simp [hx]
+    · rw [loopIter_succ_of_true (hμ x hx)]
+  rw [this, ← _root_.ConvexPowerset.bind_assoc, minProb_bind_eq_iInf]
+
+private lemma key (a t m A : ENNReal) (ha : a ≤ 1) (ht : t ≤ 1) (hm : m ≤ 1) (hA : A ≤ 1) :
+    (1 - m) * (t * a + (1 - t) * A) + m ≤ t * ((1 - m) * a + m) + (1 - t) := by
+  have h1 : ∀ x : ENNReal, x ≤ 1 → x ≠ (⊤ : ENNReal) := fun x hx ↦ ne_top_of_le_ne_top ENNReal.one_ne_top hx
+  rw [← ENNReal.toReal_le_toReal (by finiteness [h1 a ha, h1 t ht, h1 m hm, h1 A hA])
+    (by finiteness [h1 a ha, h1 t ht, h1 m hm])]
+  rw [ENNReal.toReal_add (by finiteness [h1 a ha, h1 t ht, h1 m hm, h1 A hA]) (h1 m hm),
+    ENNReal.toReal_add (by finiteness [h1 a ha, h1 t ht, h1 m hm]) (by finiteness),
+    ENNReal.toReal_mul, ENNReal.toReal_mul,
+    ENNReal.toReal_add (by finiteness [h1 a ha, h1 t ht]) (by finiteness [h1 A hA]),
+    ENNReal.toReal_add (by finiteness [h1 a ha, h1 m hm]) (h1 m hm),
+    ENNReal.toReal_mul, ENNReal.toReal_mul, ENNReal.toReal_mul,
+    ENNReal.toReal_sub_of_le hm ENNReal.one_ne_top, ENNReal.toReal_sub_of_le ht ENNReal.one_ne_top]
+  have ha' := ENNReal.toReal_le_of_le_ofReal zero_le_one (by simpa using ha)
+  have ht' := ENNReal.toReal_le_of_le_ofReal zero_le_one (by simpa using ht)
+  have hm' := ENNReal.toReal_le_of_le_ofReal zero_le_one (by simpa using hm)
+  have hA' := ENNReal.toReal_le_of_le_ofReal zero_le_one (by simpa using hA)
+  simp only [ENNReal.toReal_one]
+  have := ENNReal.toReal_nonneg (a := a); have := ENNReal.toReal_nonneg (a := t)
+  have := ENNReal.toReal_nonneg (a := m); have := ENNReal.toReal_nonneg (a := A)
+  nlinarith [mul_nonneg (sub_nonneg.mpr ht') (sub_nonneg.mpr hm'),
+    mul_nonneg (mul_nonneg (sub_nonneg.mpr ht') (sub_nonneg.mpr hm')) (sub_nonneg.mpr hA')]
+
+variable {Inv Post : Distr Mem → Prop}
+
+/-- If every distribution satisfying the invariant terminates within `k` unrollings with
+probability at least `m`, then `n` more unrollings turn a termination probability `a` into
+at least `(1 - m) * a + m`. -/
+theorem avgMin_loopIter_add
+    (hInv : ∀ μ, Inv μ → ∀ x, μ (some x) ≠ 0 → e x = some 1)
+    (hPost : ∀ ν, Post ν → ∀ x, ν (some x) ≠ 0 → e x = some 0)
+    (hPost1 : ∀ ν, Post ν → ∑' x : Mem, ν (some x) = 1)
+    (hstep : ∀ μ, Inv μ → ∀ ν ∈ singleton' μ >>= f, ∃ (ν₁ ν₂ : Distr Mem) (t : ENNReal), t ≤ 1 ∧
+      Inv ν₁ ∧ Post ν₂ ∧ ∀ x, ν (some x) = t * ν₁ (some x) + (1 - t) * ν₂ (some x))
+    {k : ℕ} (hk : 1 ≤ k) {m : ENNReal} (hm : m ≤ 1)
+    (hmk : ∀ ν, Inv ν → m ≤ avgMin (loopIter e f k) ν Set.univ) :
+    ∀ n μ, Inv μ → (1 - m) * avgMin (loopIter e f n) μ Set.univ + m ≤
+      avgMin (loopIter e f (n + k)) μ Set.univ := by
+  intro n
+  induction n with
+  | zero => intro μ hμ; simpa [avgMin_loopIter_zero] using hmk μ hμ
+  | succ n ih =>
+    intro μ hμ
+    obtain ⟨j, hj⟩ : ∃ j, n + k = j + 1 := ⟨n + k - 1, by omega⟩
+    rw [show n + 1 + k = (n + k) + 1 by omega, avgMin_loopIter_succ_run (hInv μ hμ),
+      avgMin_loopIter_succ_run (hInv μ hμ)]
+    refine le_iInf fun ⟨ν, hν⟩ ↦ ?_
+    obtain ⟨ν₁, ν₂, t, ht, h₁, h₂, hdec⟩ := hstep μ hμ ν hν
+    calc (1 - m) * (⨅ ν : {ν // ν ∈ singleton' μ >>= f},
+            avgMin (loopIter e f n) ν Set.univ) + m
+        ≤ (1 - m) * avgMin (loopIter e f n) ν Set.univ + m := by
+          gcongr; exact iInf_le (fun (ν : {ν // ν ∈ singleton' μ >>= f}) ↦
+            avgMin (loopIter e f n) ν Set.univ) ⟨ν, hν⟩
+      _ = (1 - m) * (t * avgMin (loopIter e f n) ν₁ Set.univ +
+            (1 - t) * avgMin (loopIter e f n) ν₂ Set.univ) + m := by
+          rw [avgMin_mix _ hdec]
+      _ ≤ t * ((1 - m) * avgMin (loopIter e f n) ν₁ Set.univ + m) + (1 - t) :=
+          key _ _ _ _ (avgMin_le_one _ _ _) ht hm (avgMin_le_one _ _ _)
+      _ ≤ t * avgMin (loopIter e f (n + k)) ν₁ Set.univ + (1 - t) * 1 := by
+          rw [mul_one]; gcongr; exact ih ν₁ h₁
+      _ = avgMin (loopIter e f (n + k)) ν Set.univ := by
+          rw [avgMin_mix _ hdec, hj, avgMin_loopIter_succ_post (hPost ν₂ h₂) (hPost1 ν₂ h₂), ← hj]
+
+private lemma key2 (x c : ENNReal) (hx : x ≤ 1) (hc : c ≤ 1) :
+    1 - x * (1 - c) ≤ x * c + (1 - x) := by
+  have h1 : ∀ y : ENNReal, y ≤ 1 → y ≠ (⊤ : ENNReal) :=
+    fun y hy ↦ ne_top_of_le_ne_top ENNReal.one_ne_top hy
+  have hxc : x * (1 - c) ≤ 1 := mul_le_one' hx tsub_le_self
+  rw [← ENNReal.toReal_le_toReal (by finiteness) (by finiteness [h1 x hx, h1 c hc]),
+    ENNReal.toReal_sub_of_le hxc ENNReal.one_ne_top,
+    ENNReal.toReal_add (by finiteness [h1 x hx, h1 c hc]) (by finiteness),
+    ENNReal.toReal_mul, ENNReal.toReal_mul, ENNReal.toReal_sub_of_le hc ENNReal.one_ne_top,
+    ENNReal.toReal_sub_of_le hx ENNReal.one_ne_top]
+  simp only [ENNReal.toReal_one]
+  nlinarith
+
+/-- **Corollary D.3 (with a uniform horizon).**  If, from every distribution satisfying the
+invariant, the loop terminates within `N` unrollings with probability at least `c > 0`, then
+it terminates almost surely. -/
+theorem iSup_avgMin_loopIter_eq_one
+    (hInv : ∀ μ, Inv μ → ∀ x, μ (some x) ≠ 0 → e x = some 1)
+    (hPost : ∀ ν, Post ν → ∀ x, ν (some x) ≠ 0 → e x = some 0)
+    (hPost1 : ∀ ν, Post ν → ∑' x : Mem, ν (some x) = 1)
+    (hstep : ∀ μ, Inv μ → ∀ ν ∈ singleton' μ >>= f, ∃ (ν₁ ν₂ : Distr Mem) (t : ENNReal), t ≤ 1 ∧
+      Inv ν₁ ∧ Post ν₂ ∧ ∀ x, ν (some x) = t * ν₁ (some x) + (1 - t) * ν₂ (some x))
+    {N : ℕ} (hN : 1 ≤ N) {c : ENNReal} (hc0 : 0 < c) (hc1 : c ≤ 1)
+    (hcN : ∀ ν, Inv ν → c ≤ avgMin (loopIter e f N) ν Set.univ)
+    {μ : Distr Mem} (hμ : Inv μ) :
+    ⨆ n, avgMin (loopIter e f n) μ Set.univ = 1 := by
+  -- Termination within `(j + 1) * N` unrollings
+  have hj : ∀ j : ℕ, ∀ μ, Inv μ →
+      1 - (1 - c) ^ (j + 1) ≤ avgMin (loopIter e f ((j + 1) * N)) μ Set.univ := by
+    intro j
+    induction j with
+    | zero =>
+      intro μ hμ
+      simpa [ENNReal.sub_sub_cancel ENNReal.one_ne_top hc1] using hcN μ hμ
+    | succ j ih =>
+      intro μ hμ
+      have hx : (1 - c) ^ (j + 1) ≤ 1 := pow_le_one₀ bot_le tsub_le_self
+      have hadd := avgMin_loopIter_add hInv hPost hPost1 hstep
+        (k := (j + 1) * N) (by nlinarith) (m := 1 - (1 - c) ^ (j + 1)) tsub_le_self ih N μ hμ
+      rw [ENNReal.sub_sub_cancel ENNReal.one_ne_top hx,
+        show N + (j + 1) * N = (j + 1 + 1) * N by ring] at hadd
+      refine le_trans ?_ hadd
+      rw [pow_succ]
+      exact (key2 _ _ hx hc1).trans (by gcongr; exact hcN μ hμ)
+  refine le_antisymm (iSup_le fun n ↦ avgMin_le_one _ _ _) ?_
+  have hlim : Filter.Tendsto (fun (j : ℕ) ↦ 1 - (1 - c) ^ (j + 1)) Filter.atTop (nhds 1) := by
+    have h0 : Filter.Tendsto (fun (j : ℕ) ↦ (1 - c) ^ (j + 1)) Filter.atTop (nhds 0) :=
+      (ENNReal.tendsto_pow_atTop_nhds_zero_of_lt_one
+        (ENNReal.sub_lt_self ENNReal.one_ne_top one_ne_zero hc0.ne')).comp
+        (Filter.tendsto_add_atTop_nat 1)
+    simpa using ENNReal.Tendsto.sub tendsto_const_nhds h0 (Or.inl ENNReal.one_ne_top)
+  exact le_of_tendsto' hlim fun j ↦ (hj j μ hμ).trans (le_iSup (fun n ↦
+    avgMin (loopIter e f n) μ Set.univ) _)
+
+end D3
