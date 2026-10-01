@@ -93,6 +93,21 @@ some invariant `𝓚` on the other variables. This is the order along which
 invariant-sensitive execution is monotone (Lemma 5.3, stated in the paper for `I ∗ J`); a
 mere projection order would let other threads break the correlations that `𝓘` imposes.
 
+## Mixtures with a lower bound
+
+The paper's `φ ⊕≥p ψ` (`OProp.oplusGe`) is a mixture whose weights are any distribution on
+`Bool` giving `φ` probability at least `p`, rather than a Bernoulli distribution with a
+rational parameter `q ≥ p`: a countable mixture of such mixtures may give `φ` an irrational
+probability, and `⊕≥p` must be convex for the `NSplit2` rule. No partitioning side
+condition is needed for convexity (Lemma E.6), since the branches of a sum are
+distinguishable.
+
+In `BoundedRank` (`wp_bounded_rank`), the second branch of the premise's postcondition allows
+any rank, not only ranks at least `N`. This makes the rule stronger, and it remains sound,
+since from any rank the loop exits with probability at least `p ^ (h - ℓ)`. As in the paper,
+the rule is stated for weak triples; the strong triple follows with `wp_strengthen`, since
+the postcondition is precise.
+
 ## Precision
 
 `Precise` follows Definition 4.1: if an assertion is satisfiable, it has a least model.
