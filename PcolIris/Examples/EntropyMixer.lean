@@ -25,6 +25,17 @@ def Expr.xor (e₁ e₂ : Expr) : Expr :=
     let v₂ ← e₂ σ
     pure <| if v₁ = v₂ then 0 else 1
 
+lemma Expr.xor_local {e₁ e₂ : Expr} (h₁ : e₁.Local) (h₂ : e₂.Local) : (Expr.xor e₁ e₂).Local := by
+  refine ⟨fun {σ τ v} hle h ↦ ?_, fun {σ} x w h ↦ ?_⟩
+  · simp only [Expr.xor] at h ⊢
+    cases hσ₁ : e₁ σ <;> cases hσ₂ : e₂ σ <;> simp [hσ₁, hσ₂] at h
+    rw [h₁.mono hle hσ₁, h₂.mono hle hσ₂]; simpa using h
+  · simp only [Expr.xor] at h ⊢
+    cases hσ₁ : e₁ σ <;> cases hσ₂ : e₂ σ <;> simp [hσ₁, hσ₂] at h
+    obtain ⟨a, ha⟩ := Option.isSome_iff_exists.mp (h₁.extend x w (by rw [hσ₁]; rfl))
+    obtain ⟨b, hb⟩ := Option.isSome_iff_exists.mp (h₂.extend x w (by rw [hσ₂]; rfl))
+    simp [ha, hb]
+
 
 noncomputable def entropy_mixer : Cmd Act :=
   "y" ::= 0 ⨟
@@ -172,6 +183,7 @@ lemma wp_z_assign {F : ProbSpace → Prop} (v u : Val) :
       wp_base 𝓘 F ("z" ::= Expr.xor ($"x₁") ($"x₂")) ⌈$"z" == Expr.literal (xorVal v u)⌉ := by
   iintro ⟨h2, h1, hz⟩
   iapply wp_assign "z" (Expr.xor ($"x₁") ($"x₂")) _ (xorVal v u)
+    (Expr.xor_local (Expr.var_local _) (Expr.var_local _))
   isplitl [h1 h2 hz]
   · iapply sure_weaken (xor_entails v u)
     iapply sure_and; isplitl [h1]
@@ -218,7 +230,7 @@ lemma wp_x2_sample {F : ProbSpace → Prop} (v : Val) (hv : v = 0 ∨ v = 1) :
       wp_base 𝓘 F ("x₂" :≈ PExpr.Bern 0.5 ⨟ "z" ::= Expr.xor ($"x₁") ($"x₂")) ψ := by
   iintro ⟨h1, hx₂, hz⟩
   iapply wp_seq
-  iapply wp_bern "x₂" (0.5 : Expr) 0.5
+  iapply wp_bern "x₂" (0.5 : Expr) 0.5 (Expr.literal_local _)
   isplitl [hx₂]
   · irevert hx₂
     iapply sure_weaken (Q := iprop(((0.5 : Expr) == Expr.literal 0.5) ∧ own ($"x₂")))
@@ -236,6 +248,7 @@ lemma wp_x1_branch {F : ProbSpace → Prop} (v : Val) (hv : v = 0 ∨ v = 1) :
           ⌈𝓘.to_MProp⌉) := by
   iintro ⟨hy, hx₁, hx₂, hz⟩
   iapply wp_assign_pres "x₁" ($"y") _ v (by intro σ w; simp [Expr.var, Mem.extend])
+    (Expr.var_mono _)
   isplitl [hy hx₁]
   · iapply sure_and; isplitl [hy]
     · iapply hy
@@ -275,7 +288,7 @@ lemma entropy_mixer_spec :
   Inv.emp ⊢{{ φ }} entropy_mixer {{ ψ }} := by
   unfold φ entropy_mixer
   iintro ⟨hy, hx₁, hx₂, hz⟩; unfold wp; iapply wp_seq
-  iapply wp_assign "y" 0 _ 0; isplitl [hy]
+  iapply wp_assign "y" 0 _ 0 (Expr.literal_local _); isplitl [hy]
   · irevert hy; iapply sure_weaken; iintro hy
     isplit
     · intro _ _; exact MProp.upClose_of ⟨rfl, rfl⟩
@@ -302,7 +315,7 @@ lemma entropy_mixer_spec :
               iintro hy
               iapply wp_x1_nondet; iframe
           · unfold wp; iapply wp_atom; iintro hinv
-            iapply wp_assign "y" 1 _ 1
+            iapply wp_assign "y" 1 _ 1 (Expr.literal_local _)
             isplitl [hinv]
             · irevert hinv; iapply sure_weaken
               intro σ hσ; exact ⟨MProp.upClose_of ⟨rfl, rfl⟩, own_y_of_inv σ hσ⟩

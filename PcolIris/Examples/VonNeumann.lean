@@ -369,17 +369,6 @@ lemma oplus_bern_shift {p q : ℚ} (hp : 0 ≤ p) (hpq : p ≤ q) (hq : q ≤ 1)
     (⨁[Bern q] fun t ↦ if t = 1 then phi else psi) ⊢
       ⨁[Bern p] fun t ↦ if t = 1 then phi else chi := sorry
 
-/-- **The sampling rule of the paper (`Samp`), which keeps the value of the parameter of the
-distribution.**  This is to `wp_bern` what `wp_assign_pres` is to `wp_assign`: if writing to
-`x` cannot change the value of `e`, then the value of `e` is still known after the sampling,
-and it is independent of the sampled value. -/
-lemma wp_bern_pres {J : Inv} {F : ProbSpace → Prop} {psi : OProp}
-    (x : Var) (e : Expr) (v : Val)
-    (he : ∀ (σ : Mem) (w : Val), e (σ.extend x w) = e σ) :
-    ⌈e == Expr.literal v ∧ own (Expr.var x)⌉ ∗
-        (((Expr.var x ~ Bern v) ∗ ⌈e == Expr.literal v⌉) -∗ psi) ⊢
-      wp_base J F (x :≈ PExpr.Bern e) psi := sorry
-
 /-- **The first half of implication (23) of Appendix F.6.**  Two independent coins with the
 same bias `X` disagree with probability `2 * X * (1 - X)`, and conditioned on disagreeing
 the first one is a fair coin flip; otherwise the two coins agree.  The probabilistic content
@@ -491,6 +480,7 @@ lemma wp_sample_y {L : Finset ℚ} {F : ProbSpace → Prop} (eps X : ℚ)
       wp_base (inv L) F ("y" :≈ PExpr.Bern ($"p'")) (bodyPost' (2 * eps * (1 - eps))) := by
   iintro ⟨hx, hp, hy⟩
   iapply wp_bern_pres "y" ($"p'") X (by intro σ w; simp [Expr.var, Mem.extend])
+    (Expr.var_mono _)
   isplitl [hp hy]
   · iapply sure_and; isplitl [hp]
     · iapply hp
@@ -512,6 +502,7 @@ lemma wp_sample_xy {L : Finset ℚ} {F : ProbSpace → Prop} (eps X : ℚ)
   iintro ⟨hp, hx, hy⟩
   iapply wp_seq
   iapply wp_bern_pres "x" ($"p'") X (by intro σ w; simp [Expr.var, Mem.extend])
+    (Expr.var_mono _)
   isplitl [hp hx]
   · iapply sure_and; isplitl [hp]
     · iapply hp
@@ -531,6 +522,7 @@ lemma wp_body_branch {L : Finset ℚ} {F : ProbSpace → Prop} (eps X : ℚ)
             (bodyPost' (2 * eps * (1 - eps))) ∗ ⌈(inv L).to_MProp⌉) := by
   iintro ⟨hp, hpp, hx, hy⟩
   iapply wp_assign_pres "p'" ($"p") _ X (by intro σ w; simp [Expr.var, Mem.extend])
+    (Expr.var_mono _)
   isplitl [hp hpp]
   · iapply sure_and; isplitl [hp]
     · iapply hp
@@ -666,7 +658,7 @@ theorem vonNeumann_spec (L : Finset ℚ) (eps : ℚ) (heps : 0 < eps) (heps' : e
   iintro ⟨hx, hy, hpp⟩
   unfold wp
   iapply wp_seq
-  iapply wp_assign "x" 0 _ 0
+  iapply wp_assign "x" 0 _ 0 (Expr.literal_local _)
   isplitl [hx]
   · irevert hx; iapply sure_weaken; iintro hx
     isplit
@@ -674,7 +666,7 @@ theorem vonNeumann_spec (L : Finset ℚ) (eps : ℚ) (heps : 0 < eps) (heps' : e
     · iapply hx
   · iintro hx0
     iapply wp_seq
-    iapply wp_assign "y" 0 _ 0
+    iapply wp_assign "y" 0 _ 0 (Expr.literal_local _)
     isplitl [hy]
     · irevert hy; iapply sure_weaken; iintro hy
       isplit
