@@ -72,10 +72,12 @@ lemma inv_of_y_eq (v : Val) (hv : v = 0 ∨ v = 1) :
 
 /-- The postcondition `ψ` is precise: it is a probabilistic sum of the (precise)
 assertions `⌈$"z" == v⌉`. -/
-lemma ψ_precise : ψ.Precise := Precise.oplus fun _ _ ↦ Precise.sure _
+lemma ψ_precise : ψ.Precise := (Precise.oplusDom fun _ _ ↦
+  Precise.sureDom (MProp.Footprint.var_equals_literal _ _) (Set.finite_singleton _)).precise
 
 /-- The unit of the separating conjunction is precise. -/
-lemma emp_precise : (Iris.BI.BIBase.emp : OProp).Precise := Precise.sure _
+lemma emp_precise : (Iris.BI.BIBase.emp : OProp).Precise :=
+  Precise.sure MProp.Footprint.emp Set.finite_empty
 
 /-- The invariant `𝓘` guarantees that `y` holds one of the two values `0` and `1`. -/
 lemma exists_y_of_inv :
@@ -250,10 +252,10 @@ abbrev Bit : Set Val := {0, 1}
 /-- A nondeterministic choice between (identical) postconditions of the shape
 "weakest precondition, and the invariant holds" can be collapsed: the invariant is precise,
 and the postcondition `ψ` of the weakest precondition is precise as well. -/
-lemma collapse_post {F : ProbSpace → Prop} {ι : Type} {c : Cmd Act} :
+lemma collapse_post {F : ProbSpace → Prop} {ι : Type} [Countable ι] {c : Cmd Act} :
     OProp.nondet (fun (_ : ι) => iprop(wp_base 𝓘 F c ψ ∗ ⌈𝓘.to_MProp⌉)) ⊢
       iprop(wp_base 𝓘 F c ψ ∗ ⌈𝓘.to_MProp⌉) :=
-  Iris.BI.Entails.trans (OProp.nondet_distrib' _ _ (Precise.sure _))
+  Iris.BI.Entails.trans (OProp.nondet_distrib' _ _ (Precise.sure (Inv.footprint 𝓘) 𝓘.dom_finite))
     (Iris.BI.sep_mono_left (wp_nondet ψ_precise))
 
 /-- The first thread, given only the nondeterministic knowledge that `y` holds one of the

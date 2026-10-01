@@ -16,3 +16,4 @@ jobs:
       - name: Report declarations that still use sorry
         run: |
           lake env lean scripts/Axioms.lean
+          lake env lean scripts/Sorries.lean

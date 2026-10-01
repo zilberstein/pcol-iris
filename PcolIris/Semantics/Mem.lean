@@ -294,6 +294,33 @@ lemma le_union_right (hd : Disjoint σ.dom τ.dom) : τ ≤ (σ ⊎ τ) := by
   rw [union_comm hd]
   exact le_union_left τ σ
 
+/-- Putting a restriction of a memory in front of the memory itself does not change it. -/
+lemma union_restrict_self (σ : Mem) (X : Set Var) : (σ.restrict X ⊎ σ) = σ := by
+  funext x
+  by_cases hx : x ∈ (σ.restrict X).dom
+  · rw [union_apply_of_mem_dom hx]
+    have hX : x ∈ X := dom_restrict_subset σ X hx
+    exact restrict_apply_of_mem σ hX
+  · exact union_apply_of_notMem_dom hx
+
+/-- Restricting commutes with overwriting by a memory that lives inside the restriction. -/
+lemma union_restrict_of_subset {τ : Mem} (hτ : τ.dom ⊆ X) (σ : Mem) :
+    (τ ⊎ σ.restrict X) = (τ ⊎ σ).restrict X := by
+  funext x
+  by_cases hτx : x ∈ τ.dom
+  · rw [union_apply_of_mem_dom hτx, restrict_apply_of_mem _ (hτ hτx), union_apply_of_mem_dom hτx]
+  · rw [union_apply_of_notMem_dom hτx]
+    by_cases hx : x ∈ X
+    · rw [restrict_apply_of_mem _ hx, restrict_apply_of_mem _ hx, union_apply_of_notMem_dom hτx]
+    · rw [restrict_apply_of_notMem _ hx, restrict_apply_of_notMem _ hx]
+
+lemma restrict_le (σ : Mem) (X : Set Var) : σ.restrict X ≤ σ := by
+  rw [le_iff]
+  intro x v hx
+  by_cases h : x ∈ X
+  · rwa [restrict_apply_of_mem _ h] at hx
+  · rw [restrict_apply_of_notMem _ h] at hx; exact absurd hx (by simp)
+
 end Mem
 
 end Pcol

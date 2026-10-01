@@ -6,4 +6,5 @@ See [DESIGN.md](DESIGN.md) for the places where the formalization deliberately d
 from the paper.
 
 The main results and the axioms they depend on (in particular, whether they still use
-`sorry`) can be listed with `lake env lean scripts/Axioms.lean`.
+`sorry`) can be listed with `lake env lean scripts/Axioms.lean`, and the declarations that
+use `sorry` directly with `lake env lean scripts/Sorries.lean`.

@@ -23,6 +23,8 @@ Consequences:
   disjoint sets of memories. The branches of a sum are therefore always distinguishable, and
   the partitioning side conditions of the paper (`ψ ⇒ ⌈e ↦ X⌉` in `Split1`, `NSplit1` and
   `Exists`, and in the precision rule for `⨁`) are not needed.
+- Outcome conjunctions `⨁[ξ] φ` and `& φ` range over countable index types, so that the
+  summands can always be given disjoint sets of outcomes.
 - The product `𝓟 ⊗ 𝓠` encodes pairs of outcomes with `Nat.pairEquiv`, so it is commutative
   and associative only up to relabeling. The order `𝓟 ≤ 𝓠` therefore allows a
   measure-preserving relabeling of the outcomes (`ProbSpace.Relabels`), and compares the
@@ -56,6 +58,20 @@ Following Iris, specifications are stated with a weakest-precondition predicate
 (Definition 5.1). The invariant and the frame are kept as separate factors of the product
 that the initial and final distributions refine (`Framed`): the part of the state that
 satisfies the invariant is any space `𝓙` with `⌈I⌉ 𝓙`, as in `P ⊨ φ ∗ ⌈I⌉`.
+
+## Invariants
+
+Invariants are ordered by factorization (`Inv.LE_Inv`): `𝓘 ≤ 𝓙` when `𝓘` is `𝓙 ∗ 𝓚` for
+some invariant `𝓚` on the other variables. This is the order along which
+invariant-sensitive execution is monotone (Lemma 5.3, stated in the paper for `I ∗ J`); a
+mere projection order would let other threads break the correlations that `𝓘` imposes.
+
+## Precision
+
+`Precise` follows Definition 4.1: if an assertion is satisfiable, it has a least model.
+`⌈P⌉` is precise when `P` has a finite footprint (`MProp.Footprint`); in the paper this is
+implicit, since `⌈P⌉` is interpreted over the variables of `P`. Its least model is a space
+without probabilistic information (`ProbSpace.trivialOn`).
 
 ## Expressions
 
