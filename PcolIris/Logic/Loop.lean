@@ -126,3 +126,19 @@ lemma minProb_pure {α : Type} (x : α) (E : Set α) [Decidable (x ∈ E)] :
   exact le_antisymm ((iInf₂_le _ hx).trans (hval _ hx).le) (le_iInf₂ fun μ hμ ↦ (hval μ hμ).ge)
 
 end ConvexPowerset
+
+/-- The probability of reaching `E` in one more unrolling, where the guard is false. -/
+lemma minProb_loopIter_succ_of_false {e : Expr} {σ : Mem} (he : e σ = some 0)
+    (f : Mem → ConvexPowerset Mem) (n : ℕ) (E : Set Mem) [Decidable (σ ∈ E)] :
+    ConvexPowerset.minProb (loopIter e f (n + 1) σ) E = if σ ∈ E then 1 else 0 := by
+  rw [loopIter_succ_of_false he, ConvexPowerset.minProb_pure]
+
+/-- The probability of reaching `E` in one more unrolling, where the guard is true: the worst
+case, over the outcomes of the body, of the average probability of reaching `E` in the
+remaining unrollings. -/
+lemma minProb_loopIter_succ_of_true {e : Expr} {σ : Mem} (he : e σ = some 1)
+    (f : Mem → ConvexPowerset Mem) (n : ℕ) (E : Set Mem) :
+    ConvexPowerset.minProb (loopIter e f (n + 1) σ) E =
+      ⨅ μ ∈ f σ, ∑' x : { x : Mem | WithBot.some x ∈ μ.support },
+        μ x * ConvexPowerset.minProb (loopIter e f n x) E := by
+  rw [loopIter_succ_of_true he, ConvexPowerset.minProb_bind]
