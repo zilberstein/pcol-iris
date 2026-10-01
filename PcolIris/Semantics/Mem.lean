@@ -328,6 +328,14 @@ lemma union_le {σ₁ σ₂ σ : Mem} (h₁ : σ₁ ≤ σ) (h₂ : σ₂ ≤ σ
   · rw [union_apply_of_mem_dom hs] at hx; exact h₁ x v hx
   · rw [union_apply_of_notMem_dom hs] at hx; exact h₂ x v hx
 
+/-- A memory below `τ` that lives inside `X` is below the restriction of `τ` to `X`. -/
+lemma le_restrict {σ τ : Mem} {X : Set Var} (h : σ ≤ τ) (hX : σ.dom ⊆ X) :
+    σ ≤ τ.restrict X := by
+  rw [le_iff] at h ⊢
+  intro x v hx
+  rw [restrict_apply_of_mem _ (hX (mem_dom_of_eq_some hx))]
+  exact h x v hx
+
 end Mem
 
 end Pcol

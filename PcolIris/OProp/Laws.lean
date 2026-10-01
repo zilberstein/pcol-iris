@@ -174,6 +174,16 @@ lemma sure_sep_elim {P Q : MProp} {V W : Set Var} (hP : P.Footprint V) (hQ : Q.F
     change Q ((ProbSpace.forget 𝓟 W hW).state k)
     rw [heq]; exact ((hQ _).mp (hsplit k' hk').2).2
 
+/-- An almost sure assertion with footprint `V` holds of the part of the space over `V`. -/
+lemma sure_forget {P : MProp} {V : Set Var} (hP : P.Footprint V) {𝓟 : ProbSpace}
+    (h : sure P 𝓟) : ∃ hV : V ⊆ 𝓟.dom, sure P (ProbSpace.forget 𝓟 V hV) := by
+  obtain ⟨k₀, hk₀⟩ := ProbSpace.support_nonempty 𝓟
+  have hV : V ⊆ 𝓟.dom := by rw [← 𝓟.dom_valid k₀]; exact ((hP _).mp (h hk₀)).1
+  refine ⟨hV, fun k _ ↦ ?_⟩
+  obtain ⟨k', hk', heq⟩ := ProbSpace.forget_state_restrict 𝓟 hV k
+  change P ((ProbSpace.forget 𝓟 V hV).state k)
+  rw [heq]; exact ((hP _).mp (h hk')).2
+
 lemma sure_sep {P Q : MProp} {V W : Set Var} (hP : P.Footprint V) (hQ : Q.Footprint W) :
     ⌈ iprop(P ∗ Q) ⌉ ⊣⊢ ⌈P⌉ ∗ ⌈Q⌉ :=
   ⟨sure_sep_elim hP hQ, sure_sep_intro⟩
