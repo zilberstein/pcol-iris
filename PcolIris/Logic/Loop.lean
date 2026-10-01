@@ -439,3 +439,71 @@ theorem iSup_avgMin_loopIter_eq_one
     avgMin (loopIter e f n) μ Set.univ) _)
 
 end D3
+
+section Rank
+
+open _root_.ConvexPowerset
+
+variable {e : Expr} {f : Mem → ConvexPowerset Mem}
+
+/-- `avgMin` is linear in countable mixtures. -/
+lemma avgMin_tsum_mix (g : Mem → ConvexPowerset Mem) {ν : Distr Mem} {w : ℕ → ENNReal}
+    {νs : ℕ → Distr Mem} (hν : ∀ x, ν (some x) = ∑' s, w s * νs s (some x)) (E : Set Mem) :
+    avgMin g ν E = ∑' s, w s * avgMin g (νs s) E := by
+  unfold avgMin
+  calc ∑' x : Mem, ν (some x) * minProb (g x) E
+      = ∑' x : Mem, ∑' s, w s * (νs s (some x) * minProb (g x) E) := by
+        refine tsum_congr fun x ↦ ?_
+        rw [hν, ← ENNReal.tsum_mul_right]
+        exact tsum_congr fun s ↦ mul_assoc _ _ _
+    _ = ∑' s, ∑' x : Mem, w s * (νs s (some x) * minProb (g x) E) := ENNReal.tsum_comm
+    _ = _ := tsum_congr fun s ↦ ENNReal.tsum_mul_left
+
+/-- **The bounded rank argument.**  The loop invariant is split into classes `D r` of
+distributions at rank `r ∈ [ℓ, h]`; the loop exits exactly at rank `ℓ`.  If an iteration from
+rank `r > ℓ` produces a mixture of classes in which the ranks below `r` have weight at least
+`p`, then from rank `r` the loop terminates within `k + 1` unrollings with probability at
+least `p ^ (r - ℓ)`, as soon as `r ≤ ℓ + k`. -/
+theorem avgMin_loopIter_rank {ℓ h : ℕ} {D : ℕ → Distr Mem → Prop} {p : ENNReal} (hp1 : p ≤ 1)
+    (hexit : ∀ μ, D ℓ μ → (∀ x, μ (some x) ≠ 0 → e x = some 0) ∧ ∑' x : Mem, μ (some x) = 1)
+    (hloop : ∀ r, ℓ < r → ∀ μ, D r μ → ∀ x, μ (some x) ≠ 0 → e x = some 1)
+    (hstep : ∀ r, ℓ < r → r ≤ h → ∀ μ, D r μ → ∀ ν ∈ singleton' μ >>= f,
+      ∃ (w : ℕ → ENNReal) (νs : ℕ → Distr Mem),
+        (∀ s, w s ≠ 0 → ℓ ≤ s ∧ s ≤ h ∧ D s (νs s)) ∧
+        (∀ x, ν (some x) = ∑' s, w s * νs s (some x)) ∧
+        p ≤ ∑' s, if s < r then w s else 0) :
+    ∀ k r, ℓ ≤ r → r ≤ h → r ≤ ℓ + k → ∀ μ, D r μ →
+      p ^ (r - ℓ) ≤ avgMin (loopIter e f (k + 1)) μ Set.univ := by
+  intro k
+  induction k with
+  | zero =>
+    intro r hℓ _ hr μ hμ
+    obtain rfl : r = ℓ := by omega
+    rw [Nat.sub_self, pow_zero,
+      avgMin_loopIter_succ_post (hexit μ hμ).1 (hexit μ hμ).2]
+  | succ k ih =>
+    intro r hℓ hh hr μ hμ
+    rcases eq_or_lt_of_le hℓ with rfl | hlt
+    · rw [Nat.sub_self, pow_zero,
+        avgMin_loopIter_succ_post (hexit μ hμ).1 (hexit μ hμ).2]
+    rw [avgMin_loopIter_succ_run (hloop r hlt μ hμ)]
+    refine le_iInf fun ⟨ν, hν⟩ ↦ ?_
+    obtain ⟨w, νs, hw, hdec, hp⟩ := hstep r hlt hh μ hμ ν hν
+    rw [avgMin_tsum_mix _ hdec]
+    have hpow : p ^ (r - ℓ) = p * p ^ (r - 1 - ℓ) := by
+      rw [← pow_succ']; congr 1; omega
+    calc p ^ (r - ℓ) = p * p ^ (r - 1 - ℓ) := hpow
+      _ ≤ (∑' s, if s < r then w s else 0) * p ^ (r - 1 - ℓ) := by gcongr
+      _ = ∑' s, (if s < r then w s else 0) * p ^ (r - 1 - ℓ) := ENNReal.tsum_mul_right.symm
+      _ ≤ ∑' s, w s * avgMin (loopIter e f (k + 1)) (νs s) Set.univ := by
+        refine ENNReal.tsum_le_tsum fun s ↦ ?_
+        split_ifs with hs
+        · by_cases hws : w s = 0
+          · simp [hws]
+          obtain ⟨hs1, hs2, hDs⟩ := hw s hws
+          gcongr
+          exact (pow_le_pow_of_le_one bot_le hp1 (by omega)).trans
+            (ih s hs1 hs2 (by omega) (νs s) hDs)
+        · simp
+
+end Rank
