@@ -125,6 +125,22 @@ lemma minProb_pure {α : Type} (x : α) (E : Set α) [Decidable (x ∈ E)] :
   unfold ConvexPowerset.minProb
   exact le_antisymm ((iInf₂_le _ hx).trans (hval _ hx).le) (le_iInf₂ fun μ hμ ↦ (hval μ hμ).ge)
 
+/-- Running a computation from a fixed initial distribution: the worst case is attained by
+resolving the nondeterminism separately in each initial state, so the probability of reaching
+`E` is the average of the probabilities from each initial state. -/
+lemma minProb_singleton'_bind {α β : Type} (μ : Distr α) (g : α → ConvexPowerset β)
+    (E : Set β) :
+    ConvexPowerset.minProb (ConvexPowerset.singleton' μ >>= g) E =
+      ∑' x : α, μ (some x) * ConvexPowerset.minProb (g x) E := by
+  rw [ConvexPowerset.minProb_bind]
+  refine le_antisymm ((iInf₂_le μ (ConvexPowerset.self_mem_singleton' μ)).trans
+    (le_of_eq (ConvexPowerset.tsum_support_weights μ g E))) (le_iInf₂ fun ν hν ↦ ?_)
+  have hle : μ ≤ ν := by
+    have h : ν ∈ (ConvexPowerset.singleton' μ).set := hν
+    rwa [ConvexPowerset.singleton'_set_eq] at h
+  rw [ConvexPowerset.tsum_support_weights]
+  exact ENNReal.tsum_le_tsum fun x ↦ mul_le_mul_left (hle x) _
+
 end ConvexPowerset
 
 /-- The probability of reaching `E` in one more unrolling, where the guard is false. -/
