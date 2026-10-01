@@ -1,5 +1,6 @@
 import PcolIris.Logic.Par
 import PcolIris.Logic.LemmaC6
+import PcolIris.Logic.Framed
 import PcolIris.OProp.ProbSpaceLemmas
 import PcolIris.OProp.Laws
 import PcolIris.Semantics.Invariant
@@ -10,18 +11,20 @@ namespace Pcol
 
 open MProp
 
-def wp_base (𝓘 : Inv) (F : ProbSpace → Prop) (c : Cmd Act) (ψ : OProp) : OProp :=
-  fun 𝓟 ↦
-    ∀ (μ : Distr Mem) (𝓟fr : ProbSpace),
+def wp_base (𝓘 : Inv) (F : ProbSpace → Prop) (c : Cmd Act) (ψ : OProp) : OProp where
+  prop 𝓟 :=
+    ∀ (μ : Distr Mem) (𝓟fr 𝓙 : ProbSpace),
       -- The frame validity predicate holds
       F 𝓟fr →
-      -- The initial distribution `μ` is a refinement of the precondition
-      -- `𝓟`, the frame `𝓟fr`, and the invariant `𝓘`
-      ((𝓟 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ) →
+      -- The initial distribution `μ` refines the precondition `𝓟`, the frame `𝓟fr`, and a
+      -- space `𝓙` satisfying the invariant `𝓘`
+      Framed 𝓘 𝓟 𝓟fr 𝓙 μ →
       -- Take any `ν` that results from running the program
       ∀ ν ∈ ConvexPowerset.singleton' μ >>= 𝓛 (c.withInv 𝓘).to_pom,
-      -- Then `ν` refines some probability space `𝓠`, which satisfies the postcondition `ψ`
-        ∃ 𝓠, ((𝓠 ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ ν) ∧ ψ 𝓠
+      -- Then `ν` refines some probability space `𝓠`, which satisfies the postcondition `ψ`,
+      -- together with the same frame and a space satisfying the invariant
+        ∃ 𝓠 𝓙', Framed 𝓘 𝓠 𝓟fr 𝓙' ν ∧ ψ 𝓠
+  upcl := fun hle h μ 𝓟fr 𝓙 hF hf ν hν ↦ h μ 𝓟fr 𝓙 hF (hf.mono hle) ν hν
 
 /-- The standard "strong" wp allows any frame -/
 def wp (𝓘 : Inv) : Cmd Act → OProp → OProp := wp_base 𝓘 (fun _ ↦ True)
@@ -40,25 +43,25 @@ variable {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act}
 lemma wp_skip (φ : OProp) :
     φ ⊣⊢ wp_base 𝓘 F Cmd.skip φ := by
   constructor
-  · intro 𝓟 hφ μ 𝓟fr _ hre ν hν
-    refine ⟨𝓟, ?_, hφ⟩
+  · intro 𝓟 hφ μ 𝓟fr 𝓙 _ hf ν hν
+    refine ⟨𝓟, 𝓙, ?_, hφ⟩
     rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_skip, bind_pure] at hν
-    obtain ⟨μ, rfl⟩ := PMF.to_distr_inv hre.bot_0
+    obtain ⟨μ, rfl⟩ := PMF.to_distr_inv hf.refines.bot_0
     have heq : ν = μ.to_distr := sorry
     rwa [heq]
   · intro 𝓟 hφ; sorry
 
 lemma wp_seq {c₁ c₂ : Cmd Act} {ψ : OProp} :
     wp_base 𝓘 F c₁ (wp_base 𝓘 F c₂ ψ) ⊢ wp_base 𝓘 F (Cmd.seq c₁ c₂) ψ := by
-  intro 𝓟 h μ 𝓟fr hF href ν; rw [Cmd.withInv, Cmd.to_pom, Pom.lin_seq, ← bind_assoc]
+  intro 𝓟 h μ 𝓟fr 𝓙 hF href ν; rw [Cmd.withInv, Cmd.to_pom, Pom.lin_seq, ← bind_assoc]
   intro hν; rcases ConvexPowerset.mem_bind.mp hν with ⟨ξ, hξ, f, hf, rfl⟩
-  have ⟨𝓡, href', h'⟩ := h μ 𝓟fr hF href ξ hξ
-  refine h' ξ 𝓟fr hF href' _ ?_
+  have ⟨𝓡, 𝓙', href', h'⟩ := h μ 𝓟fr 𝓙 hF href ξ hξ
+  refine h' ξ 𝓟fr 𝓙' hF href' _ ?_
   exact ConvexPowerset.mem_bind.mpr ⟨ξ, ConvexPowerset.self_mem_singleton' _, f, hf, rfl⟩
 
 lemma wp_if_true {b : Expr} {c₁ c₂ : Cmd Act} {φ ψ : OProp} :
      ⌈b == Expr.literal 1⌉ ∧ wp_base 𝓘 F c₁ ψ ⊢ wp_base 𝓘 F (Cmd.if_stmt b c₁ c₂) ψ := by
-  intro 𝓟 ⟨htrue, hwp⟩ μ 𝓟fr hF href ν hν; rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_if_stmt] at hν
+  intro 𝓟 ⟨htrue, hwp⟩ μ 𝓟fr 𝓙 hF href ν hν; rw [Cmd.withInv, Cmd.to_pom, Pom.Semantics.lin_if_stmt] at hν
   sorry
 
 lemma wp_assign (x : Var) (e : Expr) (ψ : OProp) (v : Val) :
@@ -90,21 +93,14 @@ lemma wp_bounded_rank {ℓ h : ℕ} (hle : ℓ ≤ h) {φ : Set.Icc ℓ h → OP
 -- assertions, etc
 lemma wp_share {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ψ : OProp} :
     OProp.sure 𝓘.to_MProp ∗ wp_base 𝓘 F c ψ ⊢ wp_base Inv.emp F c iprop(ψ ∗ OProp.sure 𝓘.to_MProp) := by
-  intro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, h𝓘, hwp⟩ μ 𝓟fr hF hre ν hν
+  intro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, h𝓘, hwp⟩ μ 𝓟fr 𝓙 hF hf ν hν
   have hν' : ν ∈ ConvexPowerset.singleton' μ >>= Pom.lin (c.withInv 𝓘).to_pom := by
     refine le_iff_supset.mp ?_ hν
     apply ConvexPowerset.bind_monotone (le_refl _)
     apply (Pom.lin_continuous (act := WithInv Act) (test := Test)).monotone
     apply Cmd.withInv_monotone; refine ⟨Set.empty_subset _, ?_⟩
     intro σ; sorry
-  have ⟨𝓠, hre', hψ⟩ := hwp μ 𝓟fr hF sorry ν sorry
-  refine ⟨𝓠 ⊗ ProbSpace.trivial 𝓘.to_MProp, ?_, ?_⟩
-  · sorry
-  · refine ⟨_, _, ?_, le_refl _, hψ, ?_⟩
-    · -- Need some lemmas about domain being contractive after `wp`
-      sorry
-    · -- This should also be a lemma
-      sorry
+  sorry
 
 lemma wp_atom {𝓘 : Inv} {F : ProbSpace → Prop} {a : Act} {ψ : OProp} :
     (OProp.sure 𝓘.to_MProp -∗ wp_base Inv.emp F (Cmd.act a) (iprop(ψ ∗ OProp.sure 𝓘.to_MProp)))
@@ -121,77 +117,55 @@ of `𝓠ₖ`, and the two threads are then combined by `lemma_C6`. -/
 lemma wp_par {𝓘 : Inv} {c₁ c₂ : Cmd Act} {ψ₁ ψ₂ : OProp}
     (hψ₁ : ψ₁.Precise) (hψ₂ : ψ₂.Precise) :
     wp 𝓘 c₁ ψ₁ ∗ wp 𝓘 c₂ ψ₂ ⊢ wp 𝓘 (c₁.par c₂) iprop(ψ₁ ∗ ψ₂) := by
-  intro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, h₁, h₂⟩ μ 𝓟fr _ hre ν hν
+  intro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, h₁, h₂⟩ μ 𝓟fr 𝓙 _ hf ν hν
   -- `𝓠₁` and `𝓠₂` are the least probability spaces satisfying `ψ₁` and `ψ₂`
   obtain ⟨𝓠₁, hQ₁⟩ := hψ₁
   obtain ⟨𝓠₂, hQ₂⟩ := hψ₂
-  -- We need to somehow prove that `𝓠₁.dom ⊆ 𝓟₁.dom` in order to establish disjointness
-  -- of the postconditions
-  refine ⟨𝓠₁ ⊗ 𝓠₂, ?_,
-    ⟨𝓠₁, 𝓠₂, sorry, le_refl _, (hQ₁ 𝓠₁).mp (le_refl _), (hQ₂ 𝓠₂).mp (le_refl _)⟩⟩
-  -- The initial distribution refines the two preconditions, the frame and the invariant
-  have hμ : ((𝓟₁ ⊗ 𝓟₂ ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ) :=
-    Distr.Refines.mono
-      (ProbSpace.product_mono_left (ProbSpace.product_mono_left hle)) hre
   -- Each thread, run in isolation with an arbitrary frame, establishes its postcondition;
   -- by precision, the least such postcondition space is `𝓠ₖ`
-  have hthread₁ : ∀ (𝓕 : ProbSpace) (μ₁ : Distr Mem),
-      ((𝓟₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ₁) →
+  have hthread₁ : ∀ (𝓕 𝓙₁ : ProbSpace) (μ₁ : Distr Mem), Framed 𝓘 𝓟₁ 𝓕 𝓙₁ μ₁ →
       ∀ ν₁ ∈ ConvexPowerset.singleton' μ₁ >>= 𝓛 (c₁.withInv 𝓘).to_pom,
-        ((𝓠₁ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ ν₁) := by
-    intro 𝓕 μ₁ hre₁ ν₁ hν₁
-    obtain ⟨𝓠, href, hψ⟩ := h₁ μ₁ 𝓕 True.intro hre₁ ν₁ hν₁
-    exact Distr.Refines.mono
-      (ProbSpace.product_mono_left (ProbSpace.product_mono_left ((hQ₁ 𝓠).mpr hψ))) href
-  have hthread₂ : ∀ (𝓕 : ProbSpace) (μ₂ : Distr Mem),
-      ((𝓟₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ μ₂) →
+        ∃ 𝓙₁', Framed 𝓘 𝓠₁ 𝓕 𝓙₁' ν₁ := by
+    intro 𝓕 𝓙₁ μ₁ hf₁ ν₁ hν₁
+    obtain ⟨𝓠, 𝓙₁', hf', hψ⟩ := h₁ μ₁ 𝓕 𝓙₁ True.intro hf₁ ν₁ hν₁
+    exact ⟨𝓙₁', hf'.mono ((hQ₁ 𝓠).mpr hψ)⟩
+  have hthread₂ : ∀ (𝓕 𝓙₂ : ProbSpace) (μ₂ : Distr Mem), Framed 𝓘 𝓟₂ 𝓕 𝓙₂ μ₂ →
       ∀ ν₂ ∈ ConvexPowerset.singleton' μ₂ >>= 𝓛 (c₂.withInv 𝓘).to_pom,
-        ((𝓠₂ ⊗ 𝓕 ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ ν₂) := by
-    intro 𝓕 μ₂ hre₂ ν₂ hν₂
-    obtain ⟨𝓠, href, hψ⟩ := h₂ μ₂ 𝓕 True.intro hre₂ ν₂ hν₂
-    exact Distr.Refines.mono
-      (ProbSpace.product_mono_left (ProbSpace.product_mono_left ((hQ₂ 𝓠).mpr hψ))) href
+        ∃ 𝓙₂', Framed 𝓘 𝓠₂ 𝓕 𝓙₂' ν₂ := by
+    intro 𝓕 𝓙₂ μ₂ hf₂ ν₂ hν₂
+    obtain ⟨𝓠, 𝓙₂', hf', hψ⟩ := h₂ μ₂ 𝓕 𝓙₂ True.intro hf₂ ν₂ hν₂
+    exact ⟨𝓙₂', hf'.mono ((hQ₂ 𝓠).mpr hψ)⟩
   -- The parallel composition is handled by Lemma C.6
   rw [Cmd.withInv, Cmd.to_pom] at hν
-  exact lemma_C6 hμ hthread₁ hthread₂ ν hν
+  obtain ⟨𝓙', hf'⟩ := lemma_C6 (hf.mono hle) hthread₁ hthread₂ ν hν
+  -- We still need to prove that `𝓠₁` and `𝓠₂` own disjoint variables, which requires
+  -- knowing that the footprint of a postcondition is contained in that of the precondition
+  exact ⟨𝓠₁ ⊗ 𝓠₂, 𝓙', hf',
+    𝓠₁, 𝓠₂, sorry, le_refl _, (hQ₁ 𝓠₁).mp (le_refl _), (hQ₂ 𝓠₂).mp (le_refl _)⟩
 
 /- STRUCTURAL RULES -/
 
 variable {ι : Type} {𝓘 : Inv} {F : ProbSpace → Prop} {c : Cmd Act} {ξ : PMF ι} {φ ψ : OProp}
 
 lemma wp_conseq (h : φ ⊢ ψ) : wp_base 𝓘 F c φ ⊢ wp_base 𝓘 F c ψ := by
-  intro 𝓟 hc μ 𝓟fr F hre ν hν
-  have ⟨𝓠, hre', hφ⟩ := hc μ 𝓟fr F hre ν hν
-  refine ⟨𝓠, hre', ?_⟩; exact h 𝓠 hφ
+  intro 𝓟 hc μ 𝓟fr 𝓙 hF hf ν hν
+  have ⟨𝓠, 𝓙', hf', hφ⟩ := hc μ 𝓟fr 𝓙 hF hf ν hν
+  exact ⟨𝓠, 𝓙', hf', h 𝓠 hφ⟩
 
 lemma wp_split {ψ : ι → OProp} :
     (⨁[ ξ ] fun v ↦ wp_base 𝓘 F c (ψ v)) ⊢ wp_base 𝓘 F c (⨁[ ξ ] ψ) := by
-  intro 𝓟 ⟨𝓟', V, hdsj, hdom, hsum, hwp⟩ μ 𝓟fr hF hre ν hν
-  obtain ⟨k, rfl, hk⟩ :
-      ∃ k,
-        μ = ξ.bind k ∧
-        ∀ v ∈ ξ.support, (𝓟' v ⊗ 𝓟fr ⊗ ProbSpace.trivial 𝓘.to_MProp) ≼ k v :=
-    sorry
-  obtain ⟨ξ', _, f, hf, rfl⟩ := ConvexPowerset.mem_bind.mp hν
-  have : ξ' = ξ.bind k := sorry; subst this
-  have h v hv := hwp v hv (k v) 𝓟fr hF (hk v hv) ((k v).bind f) sorry
-  choose 𝓠 h𝓠 using h
-  classical
-  let 𝓠' v := if h : v ∈ ξ.support then 𝓠 v h else ProbSpace.trivial Iris.BI.BIBase.emp
-  -- Also need to permute indices to make the `𝓠'`s disjoint
-  refine ⟨ProbSpace.sum ξ 𝓠' V sorry sorry, ?_, ?_⟩
-  · sorry
-  · refine ⟨𝓠', V, sorry, sorry, le_refl _, ?_⟩
-    intro v hv; unfold 𝓠'; rw [dif_pos hv]
-    exact h𝓠 v hv |>.2
+  -- Plan: decompose `μ` along the summands of the precondition, run each summand
+  -- separately, and recombine the results with `ProbSpace.sum` (relabeling the outcomes of
+  -- the summands so that their supports are disjoint).
+  sorry
 
 lemma wp_nsplit {ψ : ι → OProp} :
     (& fun v ↦ wp_base 𝓘 F c (ψ v)) ⊢ wp_base 𝓘 F c (& ψ) := by sorry
 
 lemma wp_weaken :
     wp 𝓘 c ψ ⊢ wp_weak 𝓘 c ψ := by
-  intro 𝓟 hwp μ 𝓕 _ hre ν hν
-  exact hwp μ 𝓕 True.intro hre ν hν
+  intro 𝓟 hwp μ 𝓕 𝓙 _ hf ν hν
+  exact hwp μ 𝓕 𝓙 True.intro hf ν hν
 
 lemma wp_strengthen (h : ψ.Precise) :
     wp_weak 𝓘 c ψ ⊢ wp 𝓘 c ψ := by
@@ -199,13 +173,8 @@ lemma wp_strengthen (h : ψ.Precise) :
 
 lemma wp_frame :
     φ ∗ wp 𝓘 c ψ ⊢ wp 𝓘 c iprop(φ ∗ ψ) := by
-  intro 𝓟 ⟨𝓟₁, 𝓟₂, hdsj, hle, hφ, hwp⟩ μ 𝓕 _ hre ν hν
-  have ⟨𝓠, hre', hψ⟩ := hwp μ (𝓕 ⊗ 𝓟₁) True.intro ?_ ν hν
-  · refine ⟨𝓠 ⊗ 𝓟₁, ?_, 𝓟₁, 𝓠, ?_, ?_, hφ, hψ⟩
-    · sorry
-    · sorry
-    · sorry
-  · sorry
+  -- Plan: run the program with the frame `𝓕 ⊗ 𝓟₁`, and rearrange the products.
+  sorry
 
 /--
 **Assignment rule that preserves the value of the assigned expression.**

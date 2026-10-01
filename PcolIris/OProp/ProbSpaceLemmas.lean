@@ -117,80 +117,21 @@ lemma product_μ_apply (p q : ProbSpace) (E : Set ℕ) :
 
 /-- Two products whose left factors agree on the coarser σ-algebra have the same underlying
 (uncompleted) product measure there. -/
-lemma prodMeasure_agree_left {p p' q : ProbSpace} (h : p ≤ p') (E : Set ℕ)
+lemma prodMeasure_agree_left {p p' q : ProbSpace} (hm : p.mspace ≤ p'.mspace)
+    (hμ : ∀ F, p.mspace.MeasurableSet' F → p.μ F = p'.μ F) (E : Set ℕ)
     (hE : (prodMSpace p q).MeasurableSet' E) : prodMeasure p q E = prodMeasure p' q E := by
   rw [prodMeasure_apply, prodMeasure_apply]
-  refine prod_measure_eq_left h.mspace _ _ _ (fun F hF ↦ ?_) _ hE
-  rw [← @prob_coe ℕ p.mspace p.μ F, ← @prob_coe ℕ p'.mspace p'.μ F, h.μ F hF]
+  refine prod_measure_eq_left hm _ _ _ (fun F hF ↦ ?_) _ hE
+  rw [← @prob_coe ℕ p.mspace p.μ F, ← @prob_coe ℕ p'.mspace p'.μ F, hμ F hF]
 
 /-- Two products whose right factors agree on the coarser σ-algebra have the same underlying
 (uncompleted) product measure there. -/
-lemma prodMeasure_agree_right {p q q' : ProbSpace} (h : q ≤ q') (E : Set ℕ)
+lemma prodMeasure_agree_right {p q q' : ProbSpace} (hm : q.mspace ≤ q'.mspace)
+    (hμ : ∀ F, q.mspace.MeasurableSet' F → q.μ F = q'.μ F) (E : Set ℕ)
     (hE : (prodMSpace p q).MeasurableSet' E) : prodMeasure p q E = prodMeasure p q' E := by
   rw [prodMeasure_apply, prodMeasure_apply]
-  refine prod_measure_eq_right h.mspace _ _ _ (fun F hF ↦ ?_) _ hE
-  rw [← @prob_coe ℕ q.mspace q.μ F, ← @prob_coe ℕ q'.mspace q'.μ F, h.μ F hF]
-
-/-! ### Monotonicity of the product of probability spaces -/
-
-/-! ### The state of a product is not monotone
-
-The two `sorry`s below are unavoidable: the remaining goal, monotonicity of the `state`
-component, is false in general, because `Mem.union` is left-biased and hence not monotone in
-its left argument.  Enlarging the left factor of a product may make it disagree with the
-right factor at a variable that was previously undefined on the left, and there the product
-changes its value instead of only becoming more defined.  This is witnessed formally by
-`product_not_mono_left` below. -/
-
-/-- The probability space concentrated at `0` whose memory is `σ` at every point. -/
-noncomputable def constSpace (σ : Mem) : ProbSpace where
-  mspace := ⊤
-  μ := ⟨@Measure.dirac ℕ ⊤ 0, @Measure.dirac.isProbabilityMeasure ℕ ⊤ 0⟩
-  dom := σ.dom
-  state _ := σ
-  dom_valid _ := rfl
-  complete := ⟨fun _ _ ↦ by trivial⟩
-
-/-- The product of probability spaces is *not* monotone in its left argument. -/
-lemma product_not_mono_left :
-    ∃ p p' q : ProbSpace, p ≤ p' ∧ ¬ ((p ⊗ q) ≤ (p' ⊗ q)) := by
-  refine ⟨constSpace Mem.emp, constSpace (fun _ ↦ some 2), constSpace (fun _ ↦ some 1),
-    ⟨le_refl _, fun _ _ ↦ rfl, ?_, fun _ _ ↦ _root_.trivial⟩, ?_⟩
-  · intro x hx
-    exact absurd rfl hx
-  · intro hle
-    have hst := hle.state 0
-    have hx := hst "x"
-    simp [product, constSpace, Mem.union, Mem.emp] at hx
-
-/-- The product of probability spaces is monotone in its left argument. -/
-lemma product_mono_left {p p' q : ProbSpace} (h : p ≤ p') : (p ⊗ q) ≤ (p' ⊗ q) := by
-  refine ⟨completeMSpace_mono (MeasurableSpace.map_mono (prod_le_prod_left h.mspace))
-    (prodMeasure_agree_left h), ?_, ?_, ?_⟩
-  · intro E hE
-    refine ENNReal.coe_injective ?_
-    rw [prob_coe, prob_coe]
-    exact completeMeasure_agree (prodMeasure_agree_left h) hE
-  · exact Set.union_subset_union h.dom (Set.Subset.refl _)
-  · intro i x
-    simp only [product, Nat.pairEquiv_apply, Nat.pairEquiv_symm_apply, Mem.union]
-    sorry
-
-/-- The product of probability spaces is monotone in its right argument. -/
-lemma product_mono_right {p q q' : ProbSpace} (h : q ≤ q') : (p ⊗ q) ≤ (p ⊗ q') := by
-  refine ⟨completeMSpace_mono (MeasurableSpace.map_mono (prod_le_prod_right h.mspace))
-    (prodMeasure_agree_right h), ?_, ?_, ?_⟩
-  · intro E hE
-    refine ENNReal.coe_injective ?_
-    rw [prob_coe, prob_coe]
-    exact completeMeasure_agree (prodMeasure_agree_right h) hE
-  · exact Set.union_subset_union (Set.Subset.refl _) h.dom
-  · intro i x; sorry
-
-/-- The product of probability spaces is monotone. -/
-lemma product_mono {p p' q q' : ProbSpace} (h₁ : p ≤ p') (h₂ : q ≤ q') :
-    (p ⊗ q) ≤ (p' ⊗ q') :=
-  le_trans (product_mono_left h₁) (product_mono_right h₂)
+  refine prod_measure_eq_right hm _ _ _ (fun F hF ↦ ?_) _ hE
+  rw [← @prob_coe ℕ q.mspace q.μ F, ← @prob_coe ℕ q'.mspace q'.μ F, hμ F hF]
 
 /-! ### Reindexing the summands of a sum -/
 
@@ -214,7 +155,7 @@ lemma sum_reindex_le {ι : Type} (ξ : PMF ι) (e : ι ≃ ι) (hξ : ∀ i, ξ 
     intro E hE j hj
     have := hE (e j) (by rw [hξ]; exact hj)
     simpa only [Equiv.symm_apply_apply] using this
-  refine ⟨hmeas, ?_, Set.Subset.refl _, ?_⟩
+  refine le_of_id hmeas ?_ (Set.Subset.refl _) ?_
   · intro E hE
     refine ENNReal.coe_injective ?_
     rw [prob_coe, prob_coe]
@@ -224,7 +165,7 @@ lemma sum_reindex_le {ι : Type} (ξ : PMF ι) (e : ι ≃ ι) (hξ : ∀ i, ξ 
       (@ProbabilityMeasure.toMeasure ℕ (𝓠 (e.symm i)).mspace (𝓠 (e.symm i)).μ)
         (E ∩ (𝓠 (e.symm i)).support)))) ?_
     exact tsum_congr fun j ↦ by rw [hξ, Equiv.symm_apply_apply]
-  · intro n
+  · intro n _
     change sumState (fun i ↦ 𝓠 (e.symm i)) V n ≤ sumState 𝓠 V n
     unfold sumState
     by_cases hex : ∃ i, n ∈ (𝓠 (e.symm i)).support
@@ -245,14 +186,29 @@ namespace Distr
 
 namespace Refines
 
+/-- If `ξ` refines `𝓟` via `(ξ', f, g)`, then `g` maps the support of `ξ'` into the support
+of `𝓟`. -/
+lemma mem_support {ξ' : PMF ℕ} {𝓟 : ProbSpace} {g : ℕ → ℕ}
+    (hμ : ∀ {E}, E ∈ 𝓟 → 𝓟.μ E = ∑' i : ↑(g ⁻¹' E), ξ' i) {i : ℕ} (hi : i ∈ ξ'.support) :
+    g i ∈ 𝓟.support := by
+  have h1 : ((𝓟.μ 𝓟.support : NNReal) : ENNReal) = 1 := by
+    rw [ProbSpace.prob_coe]; exact ProbSpace.measure_support 𝓟
+  rw [hμ (ProbSpace.support_measurableSet 𝓟), tsum_subtype, ← PMF.toOuterMeasure_apply,
+    PMF.toOuterMeasure_apply_eq_one_iff] at h1
+  exact h1 hi
+
 /-- Refinement is antitone in the probability space: a distribution that refines `q`
 also refines every probability space that carries less information than `q`. -/
 lemma mono {ξ : Distr Mem} {p q : ProbSpace} (hle : p ≤ q) (h : q ≼ ξ) :
     p ≼ ξ := by
-  have ⟨ξ', f, hp, hr, heq⟩ := h;
-  refine ⟨ξ', f, ?_, ?_, heq⟩
-  · intro E hE; rw [hle.μ E hE]; exact hp (hle.mspace E hE)
-  · intro i; exact (hle.state i).trans (hr i)
+  obtain ⟨g, hg⟩ := hle
+  obtain ⟨ξ', f, k, hμ, hst, heq⟩ := h
+  refine ⟨ξ', f, g ∘ k, ?_, ?_, heq⟩
+  · intro E hE
+    rw [← hg.μ E hE]
+    exact hμ (hg.mspace E hE)
+  · intro i hi
+    exact (hg.state _ (mem_support hμ hi)).trans (hst i hi)
 
 end Refines
 

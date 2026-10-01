@@ -1,0 +1,83 @@
+# Design notes
+
+This development formalizes
+
+> Noam Zilberstein, Alexandra Silva and Joseph Tassarotti.
+> *Probabilistic Concurrent Reasoning in Outcome Logic: Independence, Conditioning, and
+> Invariants.* POPL 2026. <https://doi.org/10.1145/3776651>
+
+It does not follow the paper literally. This file records the places where the formalization
+deliberately departs from the paper, so that they are not mistaken for mistakes.
+
+## Indexed probability spaces
+
+The paper's probability spaces have sample spaces `Ω ⊆ Mem[S]`: the outcomes are memories.
+Here, a `ProbSpace` has the fixed sample space `ℕ`, and a separate labelling
+`state : ℕ → Mem` assigns a memory to every outcome. This follows indexed-valuation models
+such as Amaryllis (Lohse et al., *First Steps Towards Probabilistic Iris*, 2026) and
+Oblivious Probabilistic Outcome Logic.
+
+Consequences:
+
+- The summands of an outcome conjunction `⨁` only need disjoint *index* supports, not
+  disjoint sets of memories. The branches of a sum are therefore always distinguishable, and
+  the partitioning side conditions of the paper (`ψ ⇒ ⌈e ↦ X⌉` in `Split1`, `NSplit1` and
+  `Exists`, and in the precision rule for `⨁`) are not needed.
+- The product `𝓟 ⊗ 𝓠` encodes pairs of outcomes with `Nat.pairEquiv`, so it is commutative
+  and associative only up to relabeling. The order `𝓟 ≤ 𝓠` therefore allows a
+  measure-preserving relabeling of the outcomes (`ProbSpace.Relabels`), and compares the
+  memories only on the support (outcomes of probability zero are irrelevant, as in
+  Amaryllis). The laws of `⊗` are in `PcolIris/OProp/ProductLaws.lean`.
+- As in the paper, probability spaces are complete, and `⊗` completes its σ-algebra. This
+  is what makes `⌈P⌉` agree with the paper's definition (the set of outcomes satisfying `P`
+  is measurable with probability 1, `OProp.sure_iff`), so that `P ⊢ Q` implies
+  `⌈P⌉ ⊢ ⌈Q⌉`.
+- The memory of a product is a left-biased union, so the product is only monotone when
+  the factors own disjoint variables. The definitions that combine spaces (`∗`,
+  `Framed`) always require this.
+
+## One separating conjunction
+
+The paper has a strong (independent) and a weak separating conjunction `∗w`. Only the strong
+one is formalized; the weak one was not useful in practice.
+
+## Weak triples
+
+The paper's weak triples combine the precondition with the frame using the weak combination
+`⋄w` (any coupling with the right marginals). Here `wp_weak` instead keeps the independent
+product and only quantifies over frames in which every event has probability 0 or 1, i.e.
+frames that carry no probabilistic information. This is simpler to work with and suffices for
+the `Exists` rule.
+
+## Weakest preconditions instead of triples
+
+Following Iris, specifications are stated with a weakest-precondition predicate
+`wp 𝓘 c ψ : OProp`, and a triple `𝓘 ⊢ ⟨φ⟩ c ⟨ψ⟩` is the entailment `φ ⊢ wp 𝓘 c ψ`
+(Definition 5.1). The invariant and the frame are kept as separate factors of the product
+that the initial and final distributions refine (`Framed`): the part of the state that
+satisfies the invariant is any space `𝓙` with `⌈I⌉ 𝓙`, as in `P ⊨ φ ∗ ⌈I⌉`.
+
+## Expressions
+
+Expressions are shallowly embedded as functions `Mem → Option Val`, which need not be
+monotone in the memory. The atomic assertions `own e`, `e₁ == e₂` and `e₁ <= e₂` are
+therefore defined as upward closures (`MProp.upClose`); for monotone expressions
+(`Expr.Mono`, e.g. variables and literals) this is the expected pointwise meaning
+(`Expr.equals_iff`, `MProp.own_iff`).
+
+## Logical variables
+
+Logical variables and the context `Γ` are not modelled syntactically; they are ordinary Lean
+variables (a shallow embedding), so substitution lemmas are not needed.
+
+## Iris proof mode
+
+`OProp` and `MProp` are given `Iris.BI` instances so that the Iris proof mode can be used. The
+paper has no magic wand, persistence modality or later modality; they are added here only to
+satisfy the `BI` interface:
+
+- the wand is the standard one for upward-closed predicates,
+  `∀ 𝓟₁ disjoint, φ 𝓟₁ → ψ (𝓟 ⊗ 𝓟₁)`,
+- `<pers> φ` holds when `φ` holds of the unit resource (the empty memory, resp. the space
+  `ProbSpace.unit` with no variables and no information),
+- `▷ φ` is `φ`, and the COFE structure is discrete.
