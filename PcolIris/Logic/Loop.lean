@@ -242,4 +242,24 @@ theorem minProb_loopIter_eq_mul {e : Expr} {f : Mem → ConvexPowerset Mem}
     rw [hmix _ hdec, hmix _ hdec, ih ν₁ h₁, hpost k ν₂ h₂]
     ring
 
+/-- **Lemma D.2, abstractly.**  Under the hypotheses of `minProb_loopIter_eq_mul`, the
+probability that the whole loop terminates in `E` is the probability that it terminates
+times `q`. -/
+theorem minProb_while_eq_mul {e : Expr} {c : Cmd Act} {𝓘 : Inv}
+    {Inv Post : Distr Mem → Prop} {E : Set Mem} {q : ENNReal} (hq : q ≤ 1)
+    (hInv : ∀ μ, Inv μ → ∀ x, μ (some x) ≠ 0 → e x = some 1)
+    (hPost : ∀ ν, Post ν → ∀ x, ν (some x) ≠ 0 → e x = some 0)
+    (hPostE : ∀ ν, Post ν → ∑' x : Mem, ν (some x) * E.indicator 1 x = q)
+    (hPost1 : ∀ ν, Post ν → ∑' x : Mem, ν (some x) = 1)
+    (hstep : ∀ μ, Inv μ → ∀ ν ∈ singleton' μ >>= 𝓛 (c.withInv 𝓘).to_pom,
+      ∃ (ν₁ ν₂ : Distr Mem) (t : ENNReal), t ≤ 1 ∧
+      Inv ν₁ ∧ Post ν₂ ∧ ∀ x, ν (some x) = t * ν₁ (some x) + (1 - t) * ν₂ (some x))
+    {μ : Distr Mem} (hμ : Inv μ) :
+    minProb (singleton' μ >>= 𝓛 ((Cmd.while_loop e c).withInv 𝓘).to_pom) E =
+      minProb (singleton' μ >>= 𝓛 ((Cmd.while_loop e c).withInv 𝓘).to_pom) Set.univ * q := by
+  rw [minProb_while, minProb_while, ENNReal.iSup_mul]
+  refine iSup_congr fun n ↦ ?_
+  rw [Pcol.ConvexPowerset.minProb_singleton'_bind, Pcol.ConvexPowerset.minProb_singleton'_bind]
+  exact minProb_loopIter_eq_mul hq hInv hPost hPostE hPost1 hstep n μ hμ
+
 end D1
