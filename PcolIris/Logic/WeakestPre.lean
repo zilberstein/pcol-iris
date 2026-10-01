@@ -4,6 +4,8 @@ import PcolIris.Logic.Framed
 import PcolIris.Logic.Actions
 import PcolIris.OProp.ProbSpaceLemmas
 import PcolIris.OProp.Laws
+import PcolIris.OProp.MixLaws
+import PcolIris.OProp.ProofMode
 import PcolIris.Semantics.Invariant
 import PcolIris.Semantics.Semantics
 import PcolIris.OProp.OProp
@@ -769,9 +771,63 @@ lemma wp_weaken :
   intro 𝓟 hwp μ 𝓕 𝓙 _ hf ν hν
   exact hwp μ 𝓕 𝓙 True.intro hf ν hν
 
+/-- **Strengthening a weak triple.**  With a precise postcondition, preserving frames without
+probabilistic information is enough to preserve all frames.
+
+The frame is decomposed into its atoms, which carry no probabilistic information; the program
+is run from the conditioning of the initial distribution on each atom, and the least model of
+the postcondition, which is the same in every case, is framed with the sum of the atoms. -/
 lemma wp_strengthen (h : ψ.Precise) :
     wp_weak 𝓘 c ψ ⊢ wp 𝓘 c ψ := by
-  sorry
+  classical
+  intro 𝓟 hwp μ 𝓟fr 𝓙 _ hf ν hν
+  -- Split the initial distribution along the atoms of the frame
+  have hf' : Framed 𝓘 𝓟 𝓟fr.sumAtoms 𝓙 μ := hf.mono_frame (ProbSpace.sumAtoms_le 𝓟fr)
+  obtain ⟨μ', hμ', rfl⟩ := Framed.split_frame (hd := ProbSpace.atomSpaces_disjoint) hf'
+  obtain ⟨μ₀, hμ₀, K, hK, rfl⟩ := ConvexPowerset.mem_bind.mp hν
+  have hμ₀' : 𝓟fr.atomWeights.bind μ' = μ₀ := by
+    have h' : μ₀ ∈ (ConvexPowerset.singleton' (𝓟fr.atomWeights.bind μ')).set := hμ₀
+    rw [ConvexPowerset.singleton'_set_eq] at h'
+    exact proper_dist_maximal hf.refines.bot_0 h'
+  subst hμ₀'
+  set W := 𝓟fr.atomWeights
+  have hsupp : ∀ i, W i ≠ 0 → (μ' i).support ⊆ (W.bind μ').support := fun i hi x hx ↦
+    (PMF.mem_support_bind_iff _ _ _).mpr ⟨i, (PMF.mem_support_iff _ _).mpr hi, hx⟩
+  have hrun : ∀ i, W i ≠ 0 →
+      (μ' i).bind K ∈ ConvexPowerset.singleton' (μ' i) >>= 𝓛 (c.withInv 𝓘).to_pom :=
+    fun i hi ↦ ConvexPowerset.mem_bind.mpr ⟨μ' i, ConvexPowerset.self_mem_singleton' _, K,
+      fun x hx ↦ hK x (hsupp i hi hx), rfl⟩
+  -- Each atom carries no probabilistic information, so the weak triple applies
+  have hbr : ∀ i, ∃ 𝓠 𝓙' : ProbSpace, W i ≠ 0 →
+      Distr.Keeps (μ' i) ((μ' i).bind K) ∧ Framed 𝓘 𝓠 (𝓟fr.atomSpaces i) 𝓙' ((μ' i).bind K) ∧
+        𝓠.dom ⊆ 𝓟.dom ∧ 𝓙'.dom = 𝓘.dom ∧ ψ 𝓠 := by
+    intro i
+    by_cases hi : W i = 0
+    · exact ⟨ProbSpace.unit, ProbSpace.unit, fun h ↦ absurd hi h⟩
+    obtain ⟨hk, 𝓠, 𝓙', hfQ, hdomQ, hψ⟩ := hwp (μ' i) (𝓟fr.atomSpaces i) 𝓙
+      (fun E hE ↦ ProbSpace.atomSpace_zero_one hE) (hμ' i hi) _ (hrun i hi)
+    obtain ⟨𝓙₀, hJ₀, -, hfQ₀⟩ := hfQ.shrink_inv
+    exact ⟨𝓠, 𝓙₀, fun _ ↦ ⟨hk, hfQ₀, hdomQ, hJ₀, hψ⟩⟩
+  choose 𝓠 𝓙' hbr using hbr
+  -- The least model of the postcondition
+  obtain ⟨i₀, hi₀⟩ := W.support_nonempty
+  have hi₀' : W i₀ ≠ 0 := (PMF.mem_support_iff _ _).mp hi₀
+  obtain ⟨𝓠₀, h𝓠₀⟩ := h _ (hbr i₀ hi₀').2.2.2.2
+  have hle : ∀ i, W i ≠ 0 → 𝓠₀ ≤ 𝓠 i := fun i hi ↦ (h𝓠₀ _).mpr (hbr i hi).2.2.2.2
+  -- Glue the runs back together along the atoms of the frame
+  obtain ⟨𝓙'', hfin⟩ := Framed.glue_frame (ν := fun i ↦ (μ' i).bind K)
+    (hd := ProbSpace.atomSpaces_disjoint) (hdom := fun _ ↦ rfl)
+    (fun i hi ↦ (hbr i hi).2.1.mono (hle i hi)) (fun i hi ↦ (hbr i hi).2.2.2.1)
+  change Distr.Keeps (W.bind μ') ((W.bind μ').bind K) ∧ _
+  rw [PMF.bind_bind]
+  refine ⟨fun D hD m hm ↦ ?_, 𝓠₀, 𝓙'', hfin.mono_frame (ProbSpace.le_sumAtoms 𝓟fr),
+    (ProbSpace.dom_mono (hle i₀ hi₀')).trans (hbr i₀ hi₀').2.2.1, (h𝓠₀ 𝓠₀).mp le_rfl⟩
+  have hm' : (m : WithBot Mem) ∈ (W.bind fun i ↦ (μ' i).bind K).support :=
+    (PMF.mem_support_iff _ _).mpr hm
+  obtain ⟨i, hi, hmi⟩ := (PMF.mem_support_bind_iff _ _ _).mp hm'
+  have hi' : W i ≠ 0 := (PMF.mem_support_iff _ _).mp hi
+  exact (hbr i hi').1 D (fun m' hm'' ↦ hD m' (hsupp i hi' ((PMF.mem_support_iff _ _).mpr hm'')))
+    m ((PMF.mem_support_iff _ _).mp hmi)
 
 /-- The `Frame` rule: a frame that is independent of the program's resources is preserved. -/
 lemma wp_frame :
@@ -874,9 +930,176 @@ lemma wp_nondet {κ : Type} [Countable κ] {ψ : OProp} (h : ψ.Precise) :
     OProp.nondet (fun (_ : κ) => wp_base 𝓘 F c ψ) ⊢ wp_base 𝓘 F c ψ :=
   Iris.BI.Entails.trans wp_nsplit (wp_conseq (OProp.nondet_collapse h))
 
-lemma wp_exists {ι : Type} [Countable ι] {P : ι → MProp} :
-    ((& fun i ↦ ⌈P i⌉) -∗ wp_base 𝓘 F c ψ)
-    ⊢ ⌈ iprop( ∃ i, P i ) ⌉ -∗ wp_weak 𝓘 c ψ := by
-  sorry
+/-- **The `Exists` rule** (as in the paper): case analysis on a variable that is only bound
+inside an almost sure assertion.  The pure assertion is the whole precondition: splitting it
+into its cases would be unsound in the presence of other resources that carry probabilistic
+information (see Section 4 of the paper).
+
+The initial distribution is split according to which case holds; the resulting outcome
+conjunction is built from spaces without probabilistic information, so the split is
+independent of the frame (whose events have probability `0` or `1`) and of the invariant. -/
+theorem wp_exists_pure {ι : Type} [Countable ι] {R : ι → MProp}
+    (h : (& fun i ↦ ⌈R i⌉) ⊢ wp_weak 𝓘 c ψ) : ⌈iprop(∃ i, R i)⌉ ⊢ wp_weak 𝓘 c ψ := by
+  classical
+  haveI : Encodable ι := Encodable.ofCountable ι
+  intro 𝓟 hpre μ 𝓟fr 𝓙 hF hf ν hν
+  obtain ⟨Ξ, f, g, hv, rfl⟩ := Distr.RefinesVia.of_refines hf.refines
+  have hd12 : Disjoint 𝓟.dom 𝓟fr.dom := hf.disj_frame
+  have hd3 : Disjoint (𝓟.dom ∪ 𝓟fr.dom) 𝓙.dom := hf.disj_inv
+  -- The three factors, read through the representation of `μ`
+  obtain ⟨hP, hrP⟩ := (ProbSpace.le_product_left 𝓟 𝓟fr).trans (ProbSpace.le_product_left _ 𝓙)
+  obtain ⟨hR, hrR⟩ := (ProbSpace.le_product_right hd12).trans
+    (ProbSpace.le_product_left (𝓟 ⊗ 𝓟fr) 𝓙)
+  obtain ⟨hJ, hrJ⟩ := ProbSpace.le_product_right (p := 𝓟 ⊗ 𝓟fr) hd3
+  have hvP := hv.mono hrP
+  have hvR := hv.mono hrR
+  have hvJ := hv.mono hrJ
+  -- Which case holds, outcome by outcome
+  have hcase : ∀ k ∈ Ξ.support, ∃ i, R i (𝓟.state (hP (g k))) := fun k hk ↦ by
+    obtain ⟨_, ⟨i, rfl⟩, hi⟩ := hpre (hvP.support hk)
+    exact ⟨i, hi⟩
+  obtain ⟨k₀, hk₀⟩ := Ξ.support_nonempty
+  let I : ℕ → ι := fun k ↦ if h : k ∈ Ξ.support then (hcase k h).choose else (hcase k₀ hk₀).choose
+  have hI : ∀ k ∈ Ξ.support, R (I k) (𝓟.state (hP (g k))) := fun k hk ↦ by
+    simp only [I, dif_pos hk]; exact (hcase k hk).choose_spec
+  let w : PMF ι := Ξ.map I
+  have hfib : ∀ i, w i ≠ 0 → ∃ a ∈ I ⁻¹' {i}, a ∈ Ξ.support := fun i hi ↦ by
+    obtain ⟨a, ha, hai⟩ := (PMF.mem_support_map_iff _ _ _).mp ((PMF.mem_support_iff _ _).mpr hi)
+    exact ⟨a, hai, ha⟩
+  let Ξc : ι → PMF ℕ := fun i ↦ if h : ∃ a ∈ I ⁻¹' {i}, a ∈ Ξ.support
+    then Ξ.filter (I ⁻¹' {i}) h else Ξ
+  -- The cases, as spaces without probabilistic information
+  let st : ι → ℕ → Mem := fun i k ↦ if R i (𝓟.state (hP (g k))) then 𝓟.state (hP (g k)) else
+    if h : ∃ k₀, R i (𝓟.state (hP (g k₀))) then 𝓟.state (hP (g h.choose)) else
+      ProbSpace.junkMem 𝓟.dom
+  have hst : ∀ i k, (st i k).dom = 𝓟.dom := fun i k ↦ by
+    simp only [st]; split_ifs
+    · exact 𝓟.dom_valid _
+    · exact 𝓟.dom_valid _
+    · exact ProbSpace.junkMem_dom _
+  let 𝓡 : ι → ProbSpace := fun i ↦ ProbSpace.trivialOn 𝓟.dom (st i) (hst i)
+  have h𝓡 : ∀ i, w i ≠ 0 → OProp.sure (R i) (𝓡 i) := fun i hi n _ ↦ by
+    change R i (st i n)
+    obtain ⟨a, hai, ha⟩ := hfib i hi
+    have hRa : R i (𝓟.state (hP (g a))) := hai ▸ hI a ha
+    simp only [st]; split_ifs with h1 h2
+    · exact h1
+    · exact h2.choose_spec
+    · exact absurd ⟨a, hRa⟩ h2
+  let 𝓡' : ι → ProbSpace := fun i ↦ (𝓡 i).shift (Encodable.encode i)
+  have hd𝓡 : ∀ {i j : ι}, i ≠ j → Disjoint (𝓡' i).support (𝓡' j).support := fun h ↦
+    ProbSpace.disjoint_support_shift _ _ fun h' ↦ h (Encodable.encode_injective h')
+  -- The invariant, as a space without probabilistic information
+  obtain ⟨hIJ, hinv₀⟩ := OProp.sure_forget 𝓘.footprint hf.inv
+  let 𝓙₀ := ProbSpace.forget 𝓙 𝓘.dom hIJ
+  have hPI : Disjoint 𝓟.dom 𝓘.dom := (hd3.mono_left Set.subset_union_left).mono_right hIJ
+  have hRI : Disjoint 𝓟fr.dom 𝓘.dom := (hd3.mono_left Set.subset_union_right).mono_right hIJ
+  -- Each case refines its part of the initial distribution
+  let C : ι → ProbSpace := fun i ↦ (𝓡' i ⊗ 𝓟fr) ⊗ 𝓙₀
+  have hdC : ∀ {i j : ι}, i ≠ j → Disjoint (C i).support (C j).support := fun h ↦
+    ProbSpace.disjoint_support_product' (ProbSpace.disjoint_support_product' (hd𝓡 h))
+  have hdomC : ∀ i, (C i).dom = (𝓟.dom ∪ 𝓟fr.dom) ∪ 𝓘.dom := fun _ ↦ rfl
+  have hC : ∀ i, w i ≠ 0 → C i ≼ (Ξc i).map (some ∘ f) := by
+    intro i hi
+    have hΞc : Ξc i = Ξ.filter (I ⁻¹' {i}) (hfib i hi) := dif_pos (hfib i hi)
+    rw [hΞc]
+    have hvR' := hvR.filter hF (hfib i hi)
+    obtain ⟨g₁, hv₁⟩ := hvR'.product_trivialOn (V := 𝓘.dom)
+      (s := fun n ↦ 𝓙₀.state n) (hs := fun n ↦ 𝓙₀.dom_valid n) (hJ ∘ g) fun k hk ↦ by
+        have hk' := ((PMF.support_filter _ ▸ hk) : k ∈ I ⁻¹' {i} ∩ Ξ.support).2
+        have hm : hJ (g k) ∈ 𝓙.support := hvJ.support hk'
+        change (ProbSpace.forget 𝓙 𝓘.dom hIJ).state (hJ (g k)) ≤ f k
+        rw [ProbSpace.forget_state_of_mem 𝓙 hIJ hm]
+        exact (Mem.restrict_le _ _).trans (hvJ.2 k hk')
+    obtain ⟨g₂, hv₂⟩ := hv₁.product_trivialOn (V := 𝓟.dom) (s := st i) (hs := hst i) id
+      fun k hk ↦ by
+        have hk' := ((PMF.support_filter _ ▸ hk) : k ∈ I ⁻¹' {i} ∩ Ξ.support)
+        have hRk : R i (𝓟.state (hP (g k))) := hk'.1 ▸ hI k hk'.2
+        change st i k ≤ f k
+        simp only [st, if_pos hRk]
+        exact hvP.2 k hk'.2
+    have hFJ : Disjoint (𝓟fr ⊗ 𝓙₀).dom (𝓡' i).dom :=
+      Set.disjoint_union_left.mpr ⟨hd12.symm, hPI.symm⟩
+    refine Distr.Refines.mono ?_ hv₂.refines
+    exact (ProbSpace.product_assoc _ _ _).trans ((ProbSpace.product_comm hFJ).trans
+      (ProbSpace.product_mono_right (ProbSpace.shift_le _ _) hFJ))
+  have href : ProbSpace.sum w C _ hdC hdomC ≼ Ξ.map (some ∘ f) := by
+    have := Distr.Refines.sum (hd := hdC) (hdom := hdomC) (ν := fun i ↦ (Ξc i).map (some ∘ f)) hC
+    rwa [← PMF.map_bind, Distr.bind_filter_fiber] at this
+  -- The outcome conjunction of the cases is framed in the initial distribution
+  let S := ProbSpace.sum w 𝓡' 𝓟.dom hd𝓡 (fun _ ↦ rfl)
+  have hSC : ((S ⊗ 𝓟fr) ⊗ 𝓙₀) ≤ ProbSpace.sum w C _ hdC hdomC := by
+    have h1 : (S ⊗ (𝓟fr ⊗ 𝓙₀)) ≤ ProbSpace.sumProd w 𝓡' (𝓟fr ⊗ 𝓙₀) 𝓟.dom hd𝓡 (fun _ ↦ rfl) :=
+      ProbSpace.sum_product_le_sumProd w 𝓡' (𝓟fr ⊗ 𝓙₀) 𝓟.dom hd𝓡 (fun _ ↦ rfl)
+    have h2 : ProbSpace.sumProd w 𝓡' (𝓟fr ⊗ 𝓙₀) 𝓟.dom hd𝓡 (fun _ ↦ rfl) ≤
+        ProbSpace.sum w C _ hdC hdomC :=
+      ProbSpace.sum_mono (ProbSpace.sum_prod_disjoint (𝓟fr ⊗ 𝓙₀) hd𝓡) hdC
+        (ProbSpace.sum_prod_dom (𝓟fr ⊗ 𝓙₀) (V := 𝓟.dom) (fun _ ↦ rfl)) hdomC
+        (fun x hx ↦ by
+          change x ∈ 𝓟.dom ∪ (𝓟fr.dom ∪ 𝓘.dom) at hx
+          rcases hx with h | h | h <;> simp [h])
+        fun i _ ↦ ProbSpace.product_assoc' _ _ _
+    exact (ProbSpace.product_assoc _ _ _).trans (h1.trans h2)
+  have hfS : Framed 𝓘 S 𝓟fr 𝓙₀ (Ξ.map (some ∘ f)) :=
+    ⟨hinv₀, hd12, Set.disjoint_union_left.mpr ⟨hPI, hRI⟩, Distr.Refines.mono hSC href⟩
+  have hnd : (& fun i ↦ ⌈R i⌉) S :=
+    ⟨w, 𝓡', 𝓟.dom, hd𝓡, fun _ ↦ rfl, le_refl _, fun i hi ↦
+      (OProp.sure (R i)).mono (ProbSpace.le_shift _ _)
+        (h𝓡 i ((PMF.mem_support_iff _ _).mp hi))⟩
+  exact h S hnd _ 𝓟fr 𝓙₀ hF hfS ν hν
+
+/-- Weakest preconditions of convex postconditions are convex. -/
+theorem OProp.Convex.wp (h : ψ.Convex) : (wp_base 𝓘 F c ψ).Convex :=
+  fun ξ ↦ Iris.BI.Entails.trans wp_split (wp_conseq (h ξ))
+
+/-- **The `NSplit2` rule**: a nondeterministic choice in the precondition can be analysed
+branch by branch, provided the postcondition is convex. -/
+lemma wp_nsplit_convex (h : ψ.Convex) :
+    OProp.nondet (fun (_ : ι) ↦ wp_base 𝓘 F c ψ) ⊢ wp_base 𝓘 F c ψ :=
+  Iris.BI.Entails.trans wp_nsplit (wp_conseq (OProp.nondet_collapse_convex h))
+
+/-- **Case analysis** on an almost sure existential, derived from `wp_exists_pure` and the
+`NSplit2` rule: when the postcondition is convex, each case can be handled separately. -/
+theorem wp_exists_case {κ : Type} [Countable κ] {P : κ → MProp} (hψ : ψ.Convex)
+    (h : ∀ i, ⌈P i⌉ ⊢ wp_weak 𝓘 c ψ) : ⌈iprop(∃ i, P i)⌉ ⊢ wp_weak 𝓘 c ψ :=
+  wp_exists_pure ((OProp.nondet_weaken h).trans (wp_nsplit_convex hψ))
+
+/-- `wp_exists_case`, with the existential combined with other almost sure facts (the form
+produced by `icombine`). -/
+theorem wp_exists_case_sep {κ : Type} [Countable κ] {P : κ → MProp} {Q : MProp}
+    (hψ : ψ.Convex) (h : ∀ i, ⌈iprop(P i ∗ Q)⌉ ⊢ wp_weak 𝓘 c ψ) :
+    ⌈iprop((∃ i, P i) ∗ Q)⌉ ⊢ wp_weak 𝓘 c ψ :=
+  (OProp.sure_weaken Iris.BI.sep_exists_right.1).trans (wp_exists_case hψ h)
+
+/-- `iexists_case h [h₁ … hₙ] as i pat using hψ` applies the `Exists` rule in the proof
+mode, when the goal is a weak weakest precondition with a convex postcondition (`hψ`).
+
+- `h : ⌈∃ i, P i⌉` is the case analysis to perform;
+- `h₁ … hₙ : ⌈Qⱼ⌉` are the other almost sure facts needed by the cases. They are merged with
+  `h` by `icombine` into `⌈(∃ i, P i) ∗ Q₁ ∗ … ∗ Qₙ⌉`, since the rule only applies to
+  preconditions without probabilistic information;
+- the rest of the spatial context is dropped;
+- the proof continues for an arbitrary case `i`, with `⌈P i ∗ Q₁ ∗ … ∗ Qₙ⌉` introduced
+  with the pattern `pat`. It is split into `⌈P i⌉, ⌈Q₁⌉, …` when the assertions have known
+  footprints (`MProp.HasFootprint`). -/
+syntax "iexists_case " ident (" [" ident* "]")? " as " ident ppSpace
+  icasesPat " using " term : tactic
+
+macro_rules
+  | `(tactic| iexists_case $h:ident [$hs:ident*] as $i:ident $pat:icasesPat using $hψ:term) => do
+    let sels ← (#[h] ++ hs).mapM fun x ↦ `(selPat| $x:ident)
+    let hc ← `(icasesPat| $h:ident)
+    `(tactic| (
+      icombine $sels* as $hc
+      irevert $h:ident
+      istop
+      refine Iris.BI.wand_intro (Iris.BI.sep_elim_right.trans (wp_exists_case_sep $hψ fun $i ↦ ?_))
+      iintro $pat:icasesPat))
+  | `(tactic| iexists_case $h:ident as $i:ident $pat:icasesPat using $hψ:term) =>
+    `(tactic| (
+      irevert $h:ident
+      istop
+      refine Iris.BI.wand_intro (Iris.BI.sep_elim_right.trans (wp_exists_case $hψ fun $i ↦ ?_))
+      iintro $pat:icasesPat))
 
 end Pcol

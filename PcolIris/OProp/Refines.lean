@@ -487,6 +487,125 @@ theorem Refines.split {μ : Distr Mem} (h : ProbSpace.sum ξ 𝓡 V hd hdom ≼ 
 
 end Sums
 
+/-! ### Refinement through a given representation -/
+
+/-- `𝓡` is refined by the distribution represented by `(Ξ, f)`, through the relabeling `g`. -/
+def RefinesVia (𝓡 : ProbSpace) (Ξ : PMF ℕ) (f : ℕ → Mem) (g : ℕ → ℕ) : Prop :=
+  (∀ {E}, E ∈ 𝓡 → 𝓡.μ E = ∑' k : ↑(g ⁻¹' E), Ξ k) ∧ ∀ k ∈ Ξ.support, 𝓡.state (g k) ≤ f k
+
+namespace RefinesVia
+
+variable {Ξ : PMF ℕ} {f : ℕ → Mem} {g : ℕ → ℕ}
+
+lemma refines (h : RefinesVia 𝓡 Ξ f g) : 𝓡 ≼ Ξ.map (some ∘ f) := ⟨Ξ, f, g, h.1, h.2, rfl⟩
+
+lemma of_refines (h : 𝓡 ≼ ν) : ∃ Ξ f g, RefinesVia 𝓡 Ξ f g ∧ ν = Ξ.map (some ∘ f) :=
+  let ⟨Ξ, f, g, h₁, h₂, h₃⟩ := h; ⟨Ξ, f, g, ⟨h₁, h₂⟩, h₃⟩
+
+/-- A space below a refined space is refined through the composed relabeling. -/
+lemma mono {𝓟 : ProbSpace} {h : ℕ → ℕ} (hr : ProbSpace.Relabels 𝓟 𝓡 h)
+    (hv : RefinesVia 𝓡 Ξ f g) : RefinesVia 𝓟 Ξ f (h ∘ g) := by
+  refine ⟨fun {E} hE ↦ ?_, fun k hk ↦ ?_⟩
+  · rw [← hr.μ E hE]; exact hv.1 (hr.mspace E hE)
+  · exact (hr.state _ (Refines.mem_support hv.1 hk)).trans (hv.2 k hk)
+
+lemma support (hv : RefinesVia 𝓡 Ξ f g) {k : ℕ} (hk : k ∈ Ξ.support) : g k ∈ 𝓡.support :=
+  Refines.mem_support hv.1 hk
+
+/-- **Conditioning.**  A space whose events all have probability `0` or `1` is refined by
+every conditioning of a distribution that refines it. -/
+lemma filter (hv : RefinesVia 𝓡 Ξ f g) (h01 : ∀ E, E ∈ 𝓡 → 𝓡.μ E = 0 ∨ 𝓡.μ E = 1)
+    {S : Set ℕ} (hS : ∃ a ∈ S, a ∈ Ξ.support) : RefinesVia 𝓡 (Ξ.filter S hS) f g := by
+  refine ⟨fun {E} hE ↦ ?_, fun k hk ↦ hv.2 k ((PMF.support_filter hS ▸ hk).2)⟩
+  have hΞ := hv.1 hE
+  rw [tsum_subtype, ← PMF.toOuterMeasure_apply] at hΞ ⊢
+  rw [filter_toOuterMeasure]
+  have hS0 : Ξ.toOuterMeasure S ≠ 0 := by
+    rw [Ne, PMF.toOuterMeasure_apply_eq_zero_iff, Set.not_disjoint_iff]
+    obtain ⟨a, ha, ha'⟩ := hS; exact ⟨a, ha', ha⟩
+  have hStop : Ξ.toOuterMeasure S ≠ (⊤ : ENNReal) := by
+    refine ne_top_of_le_ne_top ENNReal.one_ne_top ?_
+    rw [← (PMF.toOuterMeasure_apply_eq_one_iff Ξ Set.univ).mpr (Set.subset_univ _)]
+    exact measure_mono (Set.subset_univ _)
+  rcases h01 E hE with h0 | h1
+  · rw [h0] at hΞ ⊢
+    have : Ξ.toOuterMeasure (g ⁻¹' E ∩ S) = 0 :=
+      measure_mono_null Set.inter_subset_left hΞ.symm
+    rw [this, zero_mul]; rfl
+  · rw [h1] at hΞ ⊢
+    have hfull : Ξ.toOuterMeasure (g ⁻¹' E ∩ S) = Ξ.toOuterMeasure S := by
+      refine PMF.toOuterMeasure_apply_eq_of_inter_support_eq _ ?_
+      ext k
+      simp only [Set.mem_inter_iff]
+      refine ⟨fun h ↦ ⟨h.1.2, h.2⟩, fun h ↦ ⟨⟨?_, h.1⟩, h.2⟩⟩
+      exact (PMF.toOuterMeasure_apply_eq_one_iff _ _).mp hΞ.symm h.2
+    rw [hfull, ENNReal.mul_inv_cancel hS0 hStop]; rfl
+
+/-- **Adding information-free variables.**  If the memories of the distribution extend the
+memories `s` (read through `t`), then the space without probabilistic information over those
+memories can be added to a refined space. -/
+lemma product_trivialOn {X : ProbSpace} (hv : RefinesVia X Ξ f g) {V : Set Var}
+    {s : ℕ → Mem} {hs : ∀ n, (s n).dom = V} (t : ℕ → ℕ) (ht : ∀ k ∈ Ξ.support, s (t k) ≤ f k) :
+    ∃ g', RefinesVia (X ⊗ ProbSpace.trivialOn V s hs) Ξ f g' := by
+  have hf : ∀ k ∈ Ξ.support, X.dom ∪ V ⊆ (f k).dom := fun k hk ↦
+    Set.union_subset ((X.dom_valid (g k)).symm.subset.trans (Mem.dom_mono (hv.2 k hk)))
+      ((hs (t k)).symm.subset.trans (Mem.dom_mono (ht k hk)))
+  have hle := Refines.le_ofPMF hv.1 hv.2 Set.subset_union_left hf
+  have hle' := ProbSpace.product_trivialOn_le (hf := hs) hle Set.subset_union_right t
+    fun k hk ↦ by
+      rw [ProbSpace.support_ofPMF] at hk
+      rw [ProbSpace.ofPMF_state (hf k hk)]
+      exact Mem.le_restrict (ht k hk) ((hs (t k)).subset.trans Set.subset_union_right)
+  obtain ⟨g', hg'⟩ := hle'
+  refine ⟨g', fun {E} hE ↦ ?_, fun k hk ↦ ?_⟩
+  · rw [← hg'.μ E hE, ProbSpace.ofPMF_μ, PMF.toOuterMeasure_apply, tsum_subtype]
+  · have hk' : k ∈ (ProbSpace.ofPMF Ξ f (X.dom ∪ V)).support := by
+      rwa [ProbSpace.support_ofPMF]
+    refine (hg'.state k hk').trans ?_
+    rw [ProbSpace.ofPMF_state (hf k hk)]
+    exact Mem.restrict_le _ _
+
+end RefinesVia
+
+open Classical in
+/-- A distribution is the average of its conditionings on the fibers of a map. -/
+lemma bind_filter_fiber {ι : Type} (Ξ : PMF ℕ) (I : ℕ → ι) :
+    (Ξ.map I).bind (fun i ↦ if h : ∃ a ∈ I ⁻¹' {i}, a ∈ Ξ.support
+      then Ξ.filter (I ⁻¹' {i}) h else Ξ) = Ξ := by
+  ext k
+  rw [PMF.bind_apply, tsum_eq_single (I k)]
+  · by_cases hk : Ξ k = 0
+    · split_ifs with hh
+      · rw [PMF.filter_apply, Set.indicator_of_mem (show k ∈ I ⁻¹' {I k} from rfl), hk,
+          zero_mul, mul_zero]
+      · rw [hk, mul_zero]
+    · have hh : ∃ a ∈ I ⁻¹' {I k}, a ∈ Ξ.support :=
+        ⟨k, rfl, (PMF.mem_support_iff _ _).mpr hk⟩
+      rw [dif_pos hh, PMF.filter_apply, Set.indicator_of_mem (show k ∈ I ⁻¹' {I k} from rfl)]
+      have hsum : ∑' a, (I ⁻¹' {I k}).indicator Ξ a = Ξ.map I (I k) := by
+        rw [PMF.map_apply]
+        refine tsum_congr fun a ↦ ?_
+        by_cases ha : I k = I a
+        · rw [if_pos ha, Set.indicator_of_mem (show a ∈ I ⁻¹' {I k} from ha.symm)]
+        · rw [if_neg ha, Set.indicator_of_notMem (show a ∉ I ⁻¹' {I k} from fun h ↦ ha h.symm)]
+      have hne : Ξ.map I (I k) ≠ 0 := (PMF.mem_support_iff _ _).mp
+        ((PMF.mem_support_map_iff _ _ _).mpr ⟨k, (PMF.mem_support_iff _ _).mpr hk, rfl⟩)
+      rw [hsum, mul_comm (Ξ k), ← mul_assoc, ENNReal.mul_inv_cancel hne (PMF.apply_ne_top _ _),
+        one_mul]
+  · intro i hi
+    split_ifs with hh
+    · rw [PMF.filter_apply, Set.indicator_of_notMem (show k ∉ I ⁻¹' {i} from fun h ↦ hi h.symm),
+        zero_mul, mul_zero]
+    · have : Ξ.map I i = 0 := by
+        rw [PMF.map_apply]
+        refine ENNReal.tsum_eq_zero.mpr fun a ↦ ?_
+        split_ifs with hia
+        · by_contra ha
+          exact hh ⟨a, hia.symm, (PMF.mem_support_iff _ _).mpr ha⟩
+        · rfl
+      rw [this, zero_mul]
+
+
 end Distr
 
 end Pcol

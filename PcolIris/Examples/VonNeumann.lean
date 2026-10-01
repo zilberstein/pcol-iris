@@ -20,6 +20,7 @@ only assumptions this file adds.
 -/
 import PcolIris.Logic.WeakestPre
 import PcolIris.OProp.Laws
+import PcolIris.OProp.MixLaws
 
 namespace Pcol
 
@@ -260,44 +261,6 @@ lemma phi1_resources :
     · exact own_var_restrict rfl hxs
     · exact own_var_restrict rfl hys
 
-/-! ### Convexity
-
-The `NSplit2` rule of the paper eliminates a nondeterministic choice in the precondition,
-provided the postcondition is *convex*, i.e. closed under probabilistic mixtures.  The
-development only provides the version of the rule for *precise* postconditions
-(`wp_nondet`), which is too strong here: the postcondition of the loop body is a
-nondeterministic mixture.  We therefore introduce convexity and derive the corresponding
-rule from `wp_nsplit`. -/
-
-/-- An assertion is convex when it is closed under probabilistic mixtures. -/
-def Convex (ψ : OProp) : Prop := ∀ {ι : Type} [Countable ι] (ξ : PMF ι), (⨁[ξ] (fun (_ : ι) => ψ)) ⊢ ψ
-
-/-- A precise assertion is convex. -/
-lemma Convex.of_precise {ψ : OProp} (h : ψ.Precise) : Convex ψ := fun _ ↦ OProp.oplus_collapse h
-
-/-- Weakest preconditions of convex postconditions are convex. -/
-lemma Convex.wp {ψ : OProp} {J : Inv} {F : ProbSpace → Prop} {c : Cmd Act} (h : Convex ψ) :
-    Convex (wp_base J F c ψ) :=
-  fun ξ ↦ Iris.BI.Entails.trans wp_split (wp_conseq (h ξ))
-
-/-- The separating conjunction of a convex assertion and a precise one is convex. -/
-lemma Convex.sep_precise {φ ψ : OProp} (hφ : Convex φ) (hψ : ψ.Precise) :
-    Convex iprop(φ ∗ ψ) := fun ξ ↦
-  Iris.BI.Entails.trans (OProp.oplus_distrib' ξ (fun _ ↦ φ) ψ hψ)
-    (Iris.BI.sep_mono_left (hφ ξ))
-
-/-- A nondeterministic choice between copies of a convex assertion collapses. -/
-lemma nondet_collapse_convex {ι : Type} [Countable ι] {ψ : OProp} (h : Convex ψ) :
-    OProp.nondet (fun (_ : ι) ↦ ψ) ⊢ ψ := by
-  rintro P ⟨ξ, hξ⟩
-  exact h ξ P hξ
-
-/-- **The `NSplit2` rule**: a nondeterministic choice in the precondition can be analysed
-branch by branch, provided the postcondition is convex. -/
-lemma wp_nsplit2 {ι : Type} [Countable ι] {ψ : OProp} {J : Inv} {F : ProbSpace → Prop} {c : Cmd Act}
-    (h : Convex ψ) : OProp.nondet (fun (_ : ι) ↦ wp_base J F c ψ) ⊢ wp_base J F c ψ :=
-  Iris.BI.Entails.trans wp_nsplit (wp_conseq (nondet_collapse_convex h))
-
 /-! ### Opening and re-establishing the resource invariant -/
 
 /-- If `p` holds one of the admissible biases, then the resource invariant holds. -/
@@ -326,17 +289,19 @@ lemma exists_p_of_inv (L : Finset ℚ) :
 a fair coin flip (`phi0`); otherwise they agree and another iteration starts (`phi1`). -/
 def bodyMix (q : ℚ) : OProp := ⨁[Bern q] fun t ↦ if t = 1 then phi0 else phi1
 
-/-! ### Laws of pcOL that this development does not provide yet
+/-! ### Laws about mixtures
 
-The derivation below is carried out with the rules of `PcolIris.Logic.WeakestPre`.  A few
-ingredients of the paper's proof are missing from the development; they are stated here (and
-left unproven) so that the shape of the derivation is exactly the one of Appendix F.6.  The
-structural laws about mixtures (`nondet_intro`, `Convex.nondet`, `Convex.oplus`,
-`oplus_bern_shift`) all amount to regrouping a probabilistic mixture, which the current
-model of `OProp` does not support: `ProbSpace.sum` requires the summands to have pairwise
-disjoint supports *and* to be pointwise below the ambient probability space even at null
-points, so a probability space cannot in general be re-presented as a mixture.  This is the
-same defect that the development itself documents for `sum_prod_distribute`. -/
+The derivation below is carried out with the rules of `PcolIris.Logic.WeakestPre`.  The
+convexity laws are instances of the regrouping laws of `PcolIris.OProp.MixLaws`.  Two
+ingredients of the paper's proof are still assumed:
+
+* `oplus_bern_shift` moves probability from one branch of a mixture to the other.  The
+  paper's `BoundedRank` rule has the postcondition `⊕≥p` (a mixture with probability at least
+  `p`), whereas `wp_bounded_rank` has an exact mixture; this lemma bridges the two, but it is
+  not valid in the current model, where a branch can only be split along the events of its
+  space.  Stating `wp_bounded_rank` with `⊕≥p` would make it unnecessary.
+* `body_split` turns the two independent samples into the joint mixture over the outcome of
+  the comparison. -/
 
 /-- **Introduction of a nondeterministic choice**: every branch of a nondeterministic choice
 entails the choice itself.  (In the semantics of the paper `&` is a union of sets of
@@ -352,13 +317,6 @@ lemma nondet_intro {iota : Type} [Countable iota] {phi : iota → OProp} (i : io
     rw [PMF.support_pure, Set.mem_singleton_iff] at hv
     subst hv
     exact (phi v).mono (ProbSpace.le_shift _ _) h
-
-/-- Nondeterministic choices are convex: a mixture of unions of mixtures is again one. -/
-lemma Convex.nondet {iota : Type} [Countable iota] {phi : iota → OProp} : Convex (OProp.nondet phi) := sorry
-
-/-- A probabilistic mixture of convex assertions is convex. -/
-lemma Convex.oplus {iota : Type} [Countable iota] {xi : PMF iota} {phi : iota → OProp}
-    (h : ∀ i, Convex (phi i)) : Convex (⨁[xi] phi) := sorry
 
 /-- **Weakening of the probability of a two-branch mixture**, i.e. the passage from the
 mixture `⊕_q` to the mixture `⊕_{≥ p}` of the paper (`p ≤ q`): the excess probability
@@ -450,7 +408,12 @@ lemma bodyPost'_convex (p : ℚ) : Convex (bodyPost' p) :=
   Convex.oplus fun t ↦ by
     by_cases h : t = 1
     · rw [if_pos h]; exact Convex.of_precise phi0_precise
-    · rw [if_neg h]; exact Convex.nondet
+    · rw [if_neg h]
+      refine Convex.nondet fun r ↦ ?_
+      unfold loopInv
+      split_ifs
+      · exact Convex.of_precise phi0_precise
+      · exact OProp.Convex.sure _
 
 /-- Implication (23) of Appendix F.6: the two-coin mixture entails the postcondition of the
 loop body, with the exit probability weakened to `2 * eps * (1 - eps)`. -/
@@ -534,27 +497,13 @@ lemma wp_body_branch {L : Finset ℚ} {F : ProbSpace → Prop} (eps X : ℚ)
     · irevert h2
       iapply sure_weaken (inv_of_p_eq X hXL)
 
-/-- The loop body, given only the nondeterministic knowledge that `p` holds one of the
-admissible biases. -/
-lemma wp_body_nondet {L : Finset ℚ} {F : ProbSpace → Prop} (eps : ℚ)
-    (heps : 0 < eps) (heps' : eps ≤ 1 / 2) (hL : ∀ v ∈ L, eps ≤ v ∧ v ≤ 1 - eps) :
-    iprop((& fun (v : {v : ℚ // v ∈ L}) => ⌈($"p") == Expr.literal v.val⌉) ∗
-        (⌈own ($"p'")⌉ ∗ (⌈own ($"x")⌉ ∗ ⌈own ($"y")⌉))) ⊢
-      wp_base Inv.emp F ("p'" ::= $"p")
-        iprop(wp_base (inv L) F ("x" :≈ PExpr.Bern ($"p'") ⨟ "y" :≈ PExpr.Bern ($"p'"))
-            (bodyPost' (2 * eps * (1 - eps))) ∗ ⌈(inv L).to_MProp⌉) := by
-  refine Iris.BI.Entails.trans (OProp.nondet_distrib _ _) ?_
-  refine Iris.BI.Entails.trans (OProp.nondet_weaken (fun v ↦
-    wp_body_branch (F := F) eps v.val heps heps' v.2 (hL v.val v.2).1 (hL v.val v.2).2)) ?_
-  exact wp_nsplit2 (Convex.sep_precise (Convex.wp (bodyPost'_convex _)) (Precise.sure (Inv.footprint (inv L)) (inv L).dom_finite))
-
 /-- The loop invariant at rank `1` provides the ownership of the three variables written by
 the loop body. -/
 lemma phi1_split : phi1 ⊢ iprop(⌈own ($"p'")⌉ ∗ (⌈own ($"x")⌉ ∗ ⌈own ($"y")⌉)) :=
   Iris.BI.Entails.trans (OProp.sure_weaken phi1_resources)
     (Iris.BI.Entails.trans
       (OProp.sure_sep (MProp.Footprint.own_var _)
-        ((MProp.Footprint.own_var _).sep (MProp.Footprint.own_var _) (by simp))).1
+        ((MProp.Footprint.own_var _).sep (MProp.Footprint.own_var _))).1
       (Iris.BI.sep_mono_right
         (OProp.sure_sep (MProp.Footprint.own_var _) (MProp.Footprint.own_var _)).1))
 
@@ -571,11 +520,11 @@ lemma wp_body {L : Finset ℚ} (eps : ℚ)
   iintro hinv
   rw [← wp_weak]
   ihave hinv := sure_weaken (exists_p_of_inv L) $$ hinv
-  irevert hinv
-  iapply wp_exists (F := fun 𝓟fr ↦ ∀ E, 𝓟fr.mspace.MeasurableSet' E →
-    𝓟fr.μ E = 0 ∨ 𝓟fr.μ E = 1)
-  iintro hp
-  iapply wp_body_nondet eps heps heps' hL
+  iexists_case hinv [hpp hx hy] as v ⟨hp, hpp, hx, hy⟩ using
+    Convex.sep_precise (Convex.wp (bodyPost'_convex _))
+      (Precise.sure (Inv.footprint (inv L)) (inv L).dom_finite)
+  unfold wp_weak
+  iapply wp_body_branch eps v.val heps heps' v.2 (hL v.val v.2).1 (hL v.val v.2).2
   iframe
 
 /-! ### The loop -/

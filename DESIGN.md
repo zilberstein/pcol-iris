@@ -51,6 +51,22 @@ product and only quantifies over frames in which every event has probability 0 o
 frames that carry no probabilistic information. This is simpler to work with and suffices for
 the `Exists` rule.
 
+## The `Exists` rule
+
+`wp_exists_pure` is the paper's rule: from `&_i ⌈P i⌉ ⊢ wp_weak 𝓘 c ψ` it derives
+`⌈∃ i, P i⌉ ⊢ wp_weak 𝓘 c ψ`. The precondition must be a single almost sure assertion. Other
+almost sure facts can be merged into it (`⌈P⌉ ∗ ⌈Q⌉ ⊢ ⌈P ∗ Q⌉`), but resources that carry
+probabilistic information cannot: as explained in Section 4 of the paper, the case split is
+then unsound.
+
+When the postcondition is convex, the outcome conjunction can be eliminated case by case
+(`wp_exists_case`, `wp_exists_case_sep`). In the proof mode, the tactic
+`iexists_case h [h₁ … hₙ] as i pat using hψ` does all of this. It merges `h : ⌈∃ i, P i⌉` with
+the almost sure hypotheses `hⱼ` (`icombine`, through a `CombineSepAs` instance), drops the rest
+of the context, and continues with an arbitrary case `i`. In that case, `⌈P i ∗ Q₁ ∗ …⌉` is
+destructed with `pat`; an `IntoSep` instance splits it again when the assertions have known
+footprints (`MProp.HasFootprint`).
+
 ## Weakest preconditions instead of triples
 
 Following Iris, specifications are stated with a weakest-precondition predicate
