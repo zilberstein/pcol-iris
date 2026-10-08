@@ -170,6 +170,29 @@ theorem sum_mono {𝓟 𝓠 : ι → ProbSpace} {V W : Set Var}
     rw [sumState_of_mem hQ hn, hG v hv n hn, sumState_of_mem hP ((hg v hv).mem_support hn)]
     exact (hg v hv).state n hn
 
+/-- A sum over a point mass is (below) its summand. -/
+theorem sum_pure_le {𝓟 : ι → ProbSpace} {V : Set Var}
+    (hP : ∀ {i j : ι}, i ≠ j → Disjoint (𝓟 i).support (𝓟 j).support)
+    (hdP : ∀ i, (𝓟 i).dom = V) (i : ι) : sum (PMF.pure i) 𝓟 V hP hdP ≤ 𝓟 i := by
+  classical
+  have hmeas : ∀ E, (sumMSpace (PMF.pure i) 𝓟).MeasurableSet' E →
+      (𝓟 i).mspace.MeasurableSet' E := by
+    intro E hE
+    have h1 := hE i (by simp)
+    have hnull : (𝓟 i).meas (E \ (𝓟 i).support) = 0 :=
+      measure_mono_null (Set.diff_subset_compl _ _) (meas_compl_support _)
+    have h2 := (𝓟 i).complete.out _ hnull
+    have := @MeasurableSet.union ℕ (𝓟 i).mspace _ _ h1 h2
+    rwa [Set.inter_union_sdiff] at this
+  refine le_of_id hmeas (fun E hE ↦ ?_) (hdP i).symm.subset
+    (fun n hn ↦ le_of_eq (sumState_of_mem hP hn))
+  refine ENNReal.coe_injective ?_
+  rw [prob_coe, prob_coe]
+  change sumMeasure (PMF.pure i) 𝓟 E = _
+  rw [sumMeasure_apply _ _ hE, sumMeasureFun, tsum_eq_single i]
+  · rw [PMF.pure_apply_self, one_mul, meas_inter_support]
+  · intro j hj; rw [PMF.pure_apply_of_ne _ _ hj, zero_mul]
+
 end SumMono
 
 end ProbSpace

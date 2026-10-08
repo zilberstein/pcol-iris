@@ -321,6 +321,13 @@ lemma restrict_le (σ : Mem) (X : Set Var) : σ.restrict X ≤ σ := by
   · rwa [restrict_apply_of_mem _ h] at hx
   · rw [restrict_apply_of_notMem _ h] at hx; exact absurd hx (by simp)
 
+lemma union_le {σ₁ σ₂ σ : Mem} (h₁ : σ₁ ≤ σ) (h₂ : σ₂ ≤ σ) : (σ₁ ⊎ σ₂) ≤ σ := by
+  rw [le_iff] at h₁ h₂ ⊢
+  intro x v hx
+  by_cases hs : x ∈ σ₁.dom
+  · rw [union_apply_of_mem_dom hs] at hx; exact h₁ x v hx
+  · rw [union_apply_of_notMem_dom hs] at hx; exact h₂ x v hx
+
 end Mem
 
 end Pcol
