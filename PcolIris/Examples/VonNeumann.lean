@@ -122,6 +122,35 @@ lemma eqTest_eval {σ : Mem} {a b : Val} (hx : σ "x" = some a) (hy : σ "y" = s
     eqTest ($"x") ($"y") σ = some (if a = b then 1 else 0) := by
   simp [eqTest, Expr.var, hx, hy]
 
+lemma eqTest_mono : Expr.Mono (eqTest ($"x") ($"y")) := by
+  intro σ τ v hle h
+  obtain ⟨a, ha⟩ : ∃ a, σ "x" = some a := by
+    cases hx : σ "x" with
+    | none => simp [eqTest, Expr.var, hx] at h
+    | some a => exact ⟨a, rfl⟩
+  obtain ⟨b, hb⟩ : ∃ b, σ "y" = some b := by
+    cases hy : σ "y" with
+    | none => simp [eqTest, Expr.var, ha, hy] at h
+    | some b => exact ⟨b, rfl⟩
+  rw [eqTest_eval ha hb] at h
+  rw [eqTest_eval (Mem.le_iff.mp hle _ _ ha) (Mem.le_iff.mp hle _ _ hb), h]
+
+lemma eqTest_vars_finite : ({"x", "y"} : Set Var).Finite := Set.toFinite _
+
+lemma eqTest_footprint (c : Val) :
+    (eqTest ($"x") ($"y") == Expr.literal c).Footprint {"x", "y"} := by
+  refine MProp.Footprint.equals_literal eqTest_mono (fun σ ↦ ?_) (fun σ h ↦ ?_) c
+  · simp [eqTest, Expr.var, Mem.restrict_apply_of_mem]
+  · intro z hz
+    rcases hz with rfl | rfl
+    · cases hx : σ "x" with
+      | none => simp [eqTest, Expr.var, hx] at h
+      | some a => exact Mem.mem_dom_of_eq_some hx
+    · cases hy : σ "y" with
+      | none =>
+        cases hx : σ "x" <;> simp [eqTest, Expr.var, hx, hy] at h
+      | some b => exact Mem.mem_dom_of_eq_some hy
+
 /-- When the two coins disagree, the guard of the loop is false. -/
 lemma guard_false {b : Val} (hb : b = 0 ∨ b = 1) :
     (iprop(($"x" == Expr.literal b) ∧ ($"y" == Expr.literal (1 - b))) : MProp) ⊢
@@ -148,7 +177,10 @@ lemma guard_true :
   exact MProp.upClose_of ⟨by rw [h]; rfl, by rw [h]; rfl⟩
 
 /-- `φ₀` is precise. -/
-lemma phi0_precise : phi0.Precise := Precise.oplus fun _ _ ↦ Precise.sure _
+lemma phi0_precise : phi0.Precise := (Precise.oplusDom fun _ _ ↦
+  Precise.sureDom ((MProp.Footprint.var_equals_literal _ _).and
+    (MProp.Footprint.var_equals_literal _ _))
+    ((Set.finite_singleton _).union (Set.finite_singleton _))).precise
 
 /-- After the loop, `x` is a fair coin flip. -/
 lemma phi0_fair : phi0 ⊢ ($"x") ~ Bern 0.5 :=
@@ -162,7 +194,7 @@ lemma loopInv_rank (r : Set.Icc (0 : ℕ) 1) :
   · rw [if_pos h, h]
     have h1 : phi0 ⊢ (⨁[Bern 0.5] (fun (_ : Val) => ⌈eqTest ($"x") ($"y") == Expr.literal 0⌉)) :=
       OProp.oplus_weaken' fun b hb ↦ OProp.sure_weaken (guard_false (Bern_support hb))
-    have h2 := Iris.BI.Entails.trans h1 (OProp.oplus_collapse (Precise.sure _))
+    have h2 := Iris.BI.Entails.trans h1 (OProp.oplus_collapse (Precise.sure (eqTest_footprint 0) eqTest_vars_finite))
     rw [Nat.cast_zero]
     exact h2
   · have h1 : (r : ℕ) = 1 := le_antisymm r.2.2 (Nat.one_le_iff_ne_zero.mpr h)
@@ -238,7 +270,7 @@ nondeterministic mixture.  We therefore introduce convexity and derive the corre
 rule from `wp_nsplit`. -/
 
 /-- An assertion is convex when it is closed under probabilistic mixtures. -/
-def Convex (ψ : OProp) : Prop := ∀ {ι : Type} (ξ : PMF ι), (⨁[ξ] (fun (_ : ι) => ψ)) ⊢ ψ
+def Convex (ψ : OProp) : Prop := ∀ {ι : Type} [Countable ι] (ξ : PMF ι), (⨁[ξ] (fun (_ : ι) => ψ)) ⊢ ψ
 
 /-- A precise assertion is convex. -/
 lemma Convex.of_precise {ψ : OProp} (h : ψ.Precise) : Convex ψ := fun _ ↦ OProp.oplus_collapse h
@@ -255,14 +287,14 @@ lemma Convex.sep_precise {φ ψ : OProp} (hφ : Convex φ) (hψ : ψ.Precise) :
     (Iris.BI.sep_mono_left (hφ ξ))
 
 /-- A nondeterministic choice between copies of a convex assertion collapses. -/
-lemma nondet_collapse_convex {ι : Type} {ψ : OProp} (h : Convex ψ) :
+lemma nondet_collapse_convex {ι : Type} [Countable ι] {ψ : OProp} (h : Convex ψ) :
     OProp.nondet (fun (_ : ι) ↦ ψ) ⊢ ψ := by
   rintro P ⟨ξ, hξ⟩
   exact h ξ P hξ
 
 /-- **The `NSplit2` rule**: a nondeterministic choice in the precondition can be analysed
 branch by branch, provided the postcondition is convex. -/
-lemma wp_nsplit2 {ι : Type} {ψ : OProp} {J : Inv} {F : ProbSpace → Prop} {c : Cmd Act}
+lemma wp_nsplit2 {ι : Type} [Countable ι] {ψ : OProp} {J : Inv} {F : ProbSpace → Prop} {c : Cmd Act}
     (h : Convex ψ) : OProp.nondet (fun (_ : ι) ↦ wp_base J F c ψ) ⊢ wp_base J F c ψ :=
   Iris.BI.Entails.trans wp_nsplit (wp_conseq (nondet_collapse_convex h))
 
@@ -309,14 +341,14 @@ same defect that the development itself documents for `sum_prod_distribute`. -/
 /-- **Introduction of a nondeterministic choice**: every branch of a nondeterministic choice
 entails the choice itself.  (In the semantics of the paper `&` is a union of sets of
 probability spaces, so this is immediate.) -/
-lemma nondet_intro {iota : Type} {phi : iota → OProp} (i : iota) : phi i ⊢ OProp.nondet phi :=
+lemma nondet_intro {iota : Type} [Countable iota] {phi : iota → OProp} (i : iota) : phi i ⊢ OProp.nondet phi :=
   sorry
 
 /-- Nondeterministic choices are convex: a mixture of unions of mixtures is again one. -/
-lemma Convex.nondet {iota : Type} {phi : iota → OProp} : Convex (OProp.nondet phi) := sorry
+lemma Convex.nondet {iota : Type} [Countable iota] {phi : iota → OProp} : Convex (OProp.nondet phi) := sorry
 
 /-- A probabilistic mixture of convex assertions is convex. -/
-lemma Convex.oplus {iota : Type} {xi : PMF iota} {phi : iota → OProp}
+lemma Convex.oplus {iota : Type} [Countable iota] {xi : PMF iota} {phi : iota → OProp}
     (h : ∀ i, Convex (phi i)) : Convex (⨁[xi] phi) := sorry
 
 /-- **Weakening of the probability of a two-branch mixture**, i.e. the passage from the
@@ -513,7 +545,7 @@ lemma wp_body_nondet {L : Finset ℚ} {F : ProbSpace → Prop} (eps : ℚ)
   refine Iris.BI.Entails.trans (OProp.nondet_distrib _ _) ?_
   refine Iris.BI.Entails.trans (OProp.nondet_weaken (fun v ↦
     wp_body_branch (F := F) eps v.val heps heps' v.2 (hL v.val v.2).1 (hL v.val v.2).2)) ?_
-  exact wp_nsplit2 (Convex.sep_precise (Convex.wp (bodyPost'_convex _)) (Precise.sure _))
+  exact wp_nsplit2 (Convex.sep_precise (Convex.wp (bodyPost'_convex _)) (Precise.sure (Inv.footprint (inv L)) (inv L).dom_finite))
 
 /-- The loop invariant at rank `1` provides the ownership of the three variables written by
 the loop body. -/

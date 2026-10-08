@@ -41,156 +41,135 @@ def to_MProp (𝓘 : Inv) : MProp := {
     simpa only [Membership.mem, Set.Mem, ← heq]
 }
 
+/-- The order on invariants: `𝓘 ≤ 𝓙` when `𝓘` factors as `𝓙 ∗ 𝓚` for an invariant `𝓚` on the
+remaining variables.  Concretely, `𝓙` owns fewer variables, every memory satisfying `𝓘`
+restricts to one satisfying `𝓙`, and replacing the `𝓙`-part of a memory satisfying `𝓘` by any
+memory satisfying `𝓙` again satisfies `𝓘`.
+
+This is the order along which invariant-sensitive execution is monotone (Lemma 5.3 of the
+paper, stated there for `I ∗ J`): a larger invariant allows more interference.  A mere
+projection would not do, since other threads could then change the variables of `𝓙` without
+preserving the correlations that `𝓘` imposes with the other variables. -/
+structure LE_Inv (𝓘 𝓙 : Inv) : Prop where
+  dom : 𝓙.dom ⊆ 𝓘.dom
+  proj : ∀ {σ}, 𝓘.prop σ → 𝓙.prop (σ.restrict 𝓙.dom)
+  mix : ∀ {σ τ}, 𝓘.prop σ → 𝓙.prop τ → 𝓘.prop (τ ⊎ σ)
+
 instance : LE Inv where
-  le 𝓙 𝓘 :=
-    𝓘.dom ⊆ 𝓙.dom ∧
-    ∀ {σ}, 𝓘.prop σ ↔ ∃ τ : Mem, σ = τ.restrict 𝓘.dom ∧ 𝓙.prop τ
+  le := LE_Inv
+
+/-- Replacing the whole memory of an invariant by another one. -/
+lemma union_eq_of_prop {𝓘 : Inv} {σ τ : Mem} (hτ : 𝓘.prop τ) (hσ : σ.dom = 𝓘.dom) :
+    (τ ⊎ σ) = τ := by
+  funext x
+  by_cases hx : x ∈ τ.dom
+  · exact Mem.union_apply_of_mem_dom hx
+  · rw [Mem.union_apply_of_notMem_dom hx, Mem.notMem_dom_iff.mp hx]
+    rw [𝓘.dom_valid hτ, ← hσ] at hx
+    exact Mem.notMem_dom_iff.mp hx
+
+/-- Restricting a memory to the domain of an invariant it satisfies does not change it. -/
+lemma restrict_of_prop {𝓘 : Inv} {σ : Mem} (h : 𝓘.prop σ) : σ.restrict 𝓘.dom = σ := by
+  rw [← 𝓘.dom_valid h, Mem.restrict_self]
+
+/-- The memories of `𝓙` that are restrictions of memories of `𝓘` and the memories of `𝓘`. -/
+lemma restrict_union_restrict {𝓙 : Inv} {σ τ : Mem} (hτ : 𝓙.prop τ) (hsub : 𝓙.dom ⊆ σ.dom) :
+    (τ ⊎ σ).restrict 𝓙.dom = τ := by
+  rw [Mem.restrict_union_left (𝓙.dom_valid hτ)]
 
 instance : Preorder Inv where
   le_refl 𝓘 := by
-    constructor
-    · exact Set.Subset.refl _
-    · intro σ; constructor
-      · intro h; have hdom := 𝓘.dom_valid h
-        exact ⟨σ, hdom.symm ▸ σ.restrict_self.symm, h⟩
-      · rintro ⟨τ, rfl, h⟩; have hdom := 𝓘.dom_valid h
-        rwa [← hdom, Mem.restrict_self]
+    refine ⟨Set.Subset.refl _, fun h ↦ by rwa [restrict_of_prop h], fun hσ hτ ↦ ?_⟩
+    rwa [union_eq_of_prop hτ (𝓘.dom_valid hσ)]
   le_trans 𝓘 𝓙 𝓚 hle₁ hle₂ := by
-    constructor
-    · exact hle₂.1.trans hle₁.1
-    · intro σ; rw [hle₂.2]
-      conv => lhs; arg 1; ext τ; rw [hle₁.2]
-      simp only [↓existsAndEq, true_and, Mem.restrict_restrict,
-        Set.inter_eq_self_of_subset_right hle₂.1]
+    refine ⟨hle₂.dom.trans hle₁.dom, fun h ↦ ?_, fun {σ τ} hσ hτ ↦ ?_⟩
+    · have := hle₂.proj (hle₁.proj h)
+      rwa [Mem.restrict_restrict, Set.inter_eq_self_of_subset_right hle₂.dom] at this
+    · -- mix `τ` into the `𝓙`-part of `σ`, and then that into `σ`
+      have hρ : 𝓙.prop (τ ⊎ σ.restrict 𝓙.dom) := hle₂.mix (hle₁.proj hσ) hτ
+      have := hle₁.mix hσ hρ
+      rwa [Mem.union_assoc, Mem.union_restrict_self] at this
 
 instance : PartialOrder Inv where
   le_antisymm 𝓘 𝓙 hle hge := by
-    have heq := Set.Subset.antisymm hge.1 hle.1
+    have heq := Set.Subset.antisymm hge.dom hle.dom
     ext1
     · exact heq
-    · ext σ; rw [hle.2]; constructor
-      · intro h; refine ⟨σ, ?_, h⟩
-        rw [← heq, ← 𝓘.dom_valid h, Mem.restrict_self]
-      · rintro ⟨σ, rfl, h⟩
-        rwa [← heq, ← 𝓘.dom_valid h, Mem.restrict_self]
+    · ext σ; constructor
+      · intro h; have := hle.proj h; rwa [← heq, restrict_of_prop h] at this
+      · intro h; have := hge.proj h; rwa [heq, restrict_of_prop h] at this
 
-/-- A directed set of invariants contains an element whose domain is contained in the
-domain of every element of the set. -/
-lemma exists_min_dom (d : DSet Inv) : ∃ L ∈ d, ∀ 𝓙 ∈ d, L.dom ⊆ 𝓙.dom := by
-  have hne : {n : ℕ | ∃ 𝓙 ∈ d, 𝓙.dom.ncard = n}.Nonempty := by
-    obtain ⟨𝓙, h𝓙⟩ := d.nonempty; exact ⟨𝓙.dom.ncard, 𝓙, h𝓙, rfl⟩
-  obtain ⟨L, hL, hcard⟩ := Nat.sInf_mem hne
-  refine ⟨L, hL, ?_⟩
-  intro 𝓙 h𝓙
-  obtain ⟨M, hM, hle₁, hle₂⟩ := d.directed _ hL _ h𝓙
-  have hsub : M.dom ⊆ L.dom := hle₁.1
-  have hle : L.dom.ncard ≤ M.dom.ncard := by
-    rw [hcard]; exact Nat.sInf_le ⟨M, hM, rfl⟩
-  have heq := Set.eq_of_subset_of_ncard_le hsub hle L.dom_finite
-  rw [← heq]; exact hle₂.1
+/-- The invariant without variables is the largest one. -/
+lemma le_emp (𝓘 : Inv) : 𝓘 ≤ emp := by
+  refine ⟨Set.empty_subset _, fun _ ↦ ?_, fun {σ τ} hσ hτ ↦ ?_⟩
+  · show Mem.dom _ = ∅
+    rw [Mem.restrict_dom]; exact Set.inter_empty _
+  · have hτ' : τ = Mem.emp := by
+      funext x; exact Mem.notMem_dom_iff.mp (by rw [show τ.dom = ∅ from hτ]; exact id)
+    rwa [hτ', Mem.emp_union]
 
-/-- Two comparable invariants with the same domain are equal. -/
-lemma eq_of_le_of_dom_eq {L M : Inv} (hle : L ≤ M) (hdom : M.dom = L.dom) : M = L := by
+/-- Two comparable invariants with the same domain are equal, unless the smaller one is
+empty (an empty invariant is below every invariant with fewer variables). -/
+lemma eq_of_le_of_dom_eq {L M : Inv} (hle : L ≤ M) (hdom : M.dom = L.dom)
+    (hne : (∃ ρ, L.prop ρ) ∨ ¬ ∃ σ, M.prop σ) : M = L := by
   ext1
   · exact hdom
-  · ext σ; rw [hle.2]; constructor
-    · rintro ⟨τ, rfl, h⟩; rwa [hdom, ← L.dom_valid h, Mem.restrict_self]
-    · intro h; exact ⟨σ, by rw [hdom, ← L.dom_valid h, Mem.restrict_self], h⟩
+  · ext σ
+    rcases hne with ⟨ρ, hρ⟩ | hM
+    · constructor
+      · intro h
+        have := hle.mix hρ h
+        rwa [union_eq_of_prop h (by rw [L.dom_valid hρ, hdom])] at this
+      · intro h
+        have := hle.proj h
+        rwa [hdom, restrict_of_prop h] at this
+    · constructor
+      · intro h; exact absurd ⟨σ, h⟩ hM
+      · intro h
+        have := hle.proj h
+        exact absurd ⟨_, this⟩ hM
 
-instance : DCPO Inv where
-  dSup d := {
-    dom := ⋂ 𝓘 ∈ d, 𝓘.dom
-    prop σ :=
-      σ.dom = (⋂ 𝓘 ∈ d, 𝓘.dom) ∧
-      ∀ 𝓘 ∈ d, ∃ τ, σ = τ.restrict σ.dom ∧ 𝓘.prop τ
-    dom_finite := by
-      have ⟨𝓘, hd⟩ := d.nonempty
-      apply 𝓘.dom_finite.subset; exact Set.biInter_subset_of_mem hd
-    dom_valid := by intro σ ⟨hdom, _⟩; exact hdom
-    prop_finite := by
-      have ⟨𝓘, hd⟩ := d.nonempty
-      refine Set.Finite.subset (𝓘.prop_finite.image (Mem.restrict · (⋂ 𝓘 ∈ d, 𝓘.dom))) ?_
-      rintro σ ⟨hdom, hprop⟩
-      obtain ⟨τ, heq, hτ⟩ := hprop _ hd
-      rw [hdom] at heq
-      exact ⟨τ, hτ, heq.symm⟩
-  }
+open Classical in
+/-- The key used to find the greatest element of a directed set of invariants: invariants
+with fewer variables are larger, and among invariants with the same variables, nonempty ones
+are larger. -/
+noncomputable def key (𝓘 : Inv) : ℕ :=
+  2 * 𝓘.dom.ncard + if ∃ σ, 𝓘.prop σ then 0 else 1
+
+lemma key_lt_of_dom_ssubset {L M : Inv} (h : M.dom ⊂ L.dom) : M.key < L.key := by
+  have := Set.ncard_lt_ncard h L.dom_finite
+  unfold key; split_ifs <;> omega
+
+/-- A directed set of invariants has a greatest element. -/
+lemma exists_greatest (d : DSet Inv) : ∃ L ∈ d, ∀ 𝓙 ∈ d, 𝓙 ≤ L := by
+  have hne : {n : ℕ | ∃ 𝓙 ∈ d, 𝓙.key = n}.Nonempty := by
+    obtain ⟨𝓙, h𝓙⟩ := d.nonempty; exact ⟨𝓙.key, 𝓙, h𝓙, rfl⟩
+  obtain ⟨L, hL, hkey⟩ := Nat.sInf_mem hne
+  refine ⟨L, hL, fun 𝓙 h𝓙 ↦ ?_⟩
+  obtain ⟨M, hM, hle₁, hle₂⟩ := d.directed _ h𝓙 _ hL
+  have hmin : L.key ≤ M.key := by rw [hkey]; exact Nat.sInf_le ⟨M, hM, rfl⟩
+  have hdom : M.dom = L.dom := by
+    by_contra hne
+    exact absurd (key_lt_of_dom_ssubset (Set.ssubset_iff_subset_ne.mpr ⟨hle₂.dom, hne⟩)) (by omega)
+  have heq : M = L := by
+    refine eq_of_le_of_dom_eq hle₂ hdom ?_
+    by_contra hc
+    push_neg at hc
+    obtain ⟨hL', ⟨σ, hσ⟩⟩ := hc
+    have : M.key < L.key := by
+      unfold key; rw [hdom, if_pos ⟨σ, hσ⟩, if_neg (by simpa using hL')]; omega
+    omega
+  exact heq ▸ hle₁
+
+noncomputable instance : DCPO Inv where
+  dSup d := (exists_greatest d).choose
   lubOfDirected d := by
-    constructor
-    · intro 𝓘 hd; constructor
-      · exact Set.biInter_subset_of_mem hd
-      · intro σ; simp only; constructor
-        · intro ⟨hdom, hprop⟩; have ⟨τ, heq, h⟩ := hprop _ hd
-          refine ⟨τ, ?_, h⟩; rw [heq, hdom]
-        · rintro ⟨τ, rfl, hprop⟩; constructor
-          · rw [Mem.restrict_dom]; apply Set.inter_eq_self_of_subset_right
-            rw [𝓘.dom_valid hprop]; exact Set.biInter_subset_of_mem hd
-          · intro 𝓙 h𝓙
-            have ⟨𝓚, h𝓚, ⟨hsub₁, hprop₁⟩, hsub₂, hprop₂⟩ := d.directed _ hd _ h𝓙
-            have hp𝓚 := hprop₁.mpr ⟨τ, rfl, hprop⟩
-            have ⟨ρ, heq, h⟩ := hprop₂.mp hp𝓚
-            refine ⟨ρ, ?_, h⟩; rw [Mem.restrict_dom]
-            conv =>
-              lhs; arg 2;
-              exact (Set.biInter_subset_of_mem h𝓚 (t := Inv.dom) |>
-                Set.inter_eq_self_of_subset_right).symm
-            rw [← Mem.restrict_restrict, heq, Mem.restrict_restrict]
-            refine congrArg₂ _ rfl ?_
-            rw [Set.inter_eq_self_of_subset_right, Set.inter_eq_self_of_subset_right]
-            · rfl
-            · rw [𝓘.dom_valid hprop]; exact Set.biInter_subset_of_mem hd
-            · exact Set.biInter_subset_of_mem h𝓚
-    · intro 𝓘 hup; constructor
-      · intro x hx; apply Set.mem_biInter; intro 𝓙 h𝓙
-        exact (hup h𝓙).1 hx
-      · intro σ
-        have ⟨𝓙, h𝓙⟩ := d.nonempty; have ⟨hsub, hprop⟩ := hup h𝓙; constructor
-        · intro h; obtain ⟨τ, rfl, hp⟩ := hprop.mp h
-          refine ⟨τ.restrict (⋂ 𝓙 ∈ d, 𝓙.dom), ?_, ?_⟩
-          · rw [Mem.restrict_restrict]; congr
-            symm; apply Set.inter_eq_self_of_subset_right
-            apply Set.subset_iInter₂; intro 𝓚 h𝓚; exact (hup h𝓚).1
-          · constructor
-            · rw [Mem.restrict_dom]; apply Set.inter_eq_self_of_subset_right
-              rw [𝓙.dom_valid hp]; exact Set.biInter_subset_of_mem h𝓙
-            · intro 𝓚 h𝓚
-              obtain ⟨L, hL, hle₁, hle₂⟩ := d.directed _ h𝓙 _ h𝓚
-              have hDL : (⋂ 𝓚 ∈ d, 𝓚.dom) ⊆ L.dom := Set.biInter_subset_of_mem hL
-              have h₁ : L.prop (τ.restrict L.dom) := hle₁.2.mpr ⟨τ, rfl, hp⟩
-              obtain ⟨ρ, heqρ, hρ⟩ := hle₂.2.mp h₁
-              refine ⟨ρ, ?_, hρ⟩
-              have hdomτ : Mem.dom (τ.restrict (⋂ 𝓚 ∈ d, 𝓚.dom))
-                  = ⋂ 𝓚 ∈ d, 𝓚.dom := by
-                rw [Mem.restrict_dom, 𝓙.dom_valid hp]
-                exact Set.inter_eq_self_of_subset_right (Set.biInter_subset_of_mem h𝓙)
-              rw [hdomτ]
-              calc τ.restrict (⋂ 𝓚 ∈ d, 𝓚.dom)
-                  = Mem.restrict (τ.restrict L.dom) (⋂ 𝓚 ∈ d, 𝓚.dom) := by
-                    rw [Mem.restrict_restrict, Set.inter_eq_self_of_subset_right hDL]
-                _ = Mem.restrict (ρ.restrict L.dom) (⋂ 𝓚 ∈ d, 𝓚.dom) := by rw [heqρ]
-                _ = ρ.restrict (⋂ 𝓚 ∈ d, 𝓚.dom) := by
-                    rw [Mem.restrict_restrict, Set.inter_eq_self_of_subset_right hDL]
-        · rintro ⟨τ, rfl, hdom, h⟩
-          have ⟨ρ, heq, hp⟩ := h _ h𝓙; refine hprop.mpr ⟨ρ, ?_, hp⟩
-          rw [heq, Mem.restrict_restrict]; congr
-          apply Set.inter_eq_self_of_subset_right; rw [hdom]
-          apply Set.subset_iInter₂; intro 𝓚 h𝓚; exact (hup h𝓚).1
-
-
-
-lemma ge_of_subset {𝓘 𝓙 : Inv} (hle : 𝓘 ≤ 𝓙) :
-    𝓙.prop = fun σ ↦ ∃ τ : Mem, σ = τ.restrict 𝓙.dom ∧ 𝓘.prop τ := by
-  ext σ; rw [hle.2]
+    obtain ⟨hL, hmax⟩ := (exists_greatest d).choose_spec
+    exact ⟨fun _ h ↦ hmax _ h, fun _ hu ↦ hu hL⟩
 
 /-- The supremum of a directed set of invariants is attained: it is a member of the set. -/
-lemma dSup_mem (d : DSet Inv) : ∃ L ∈ d, d.dSup = L := by
-  obtain ⟨L, hL, hmin⟩ := exists_min_dom d
-  have hub : ∀ 𝓙 ∈ d, 𝓙 ≤ L := by
-    intro 𝓙 h𝓙
-    obtain ⟨M, hM, hle₁, hle₂⟩ := d.directed _ h𝓙 _ hL
-    have heq := eq_of_le_of_dom_eq hle₂ (Set.Subset.antisymm hle₂.1 (hmin _ hM))
-    exact heq ▸ hle₁
-  exact ⟨L, hL, le_antisymm (DSet.dSup_le hub) (DSet.le_dSup hL)⟩
+lemma dSup_mem (d : DSet Inv) : ∃ L ∈ d, d.dSup = L :=
+  ⟨_, (exists_greatest d).choose_spec.1, rfl⟩
 
 instance : ScottCompact Inv where
   scottCompact 𝓘 := by
@@ -203,11 +182,11 @@ noncomputable def check (𝓘 : Inv) (σ : Mem) : ConvexPowerset Mem :=
   if 𝓘.prop (σ.restrict 𝓘.dom) then pure σ else ⊥
 
 lemma check_monotone (σ : Mem) : Monotone (check · σ) := by
-  intro 𝓘 𝓙 ⟨hsub, hprop⟩; simp only [check]
+  intro 𝓘 𝓙 hle; simp only [check]
   by_cases h : 𝓘.prop (σ.restrict 𝓘.dom)
   · rw [if_pos h]
-    have h' := hprop.mpr ⟨_, rfl, h⟩
-    rw [Mem.restrict_restrict, Set.inter_eq_self_of_subset_right hsub] at h'
+    have h' := hle.proj h
+    rw [Mem.restrict_restrict, Set.inter_eq_self_of_subset_right hle.dom] at h'
     rw [if_pos h']
   · rw [if_neg h]; exact bot_le
 
@@ -216,8 +195,73 @@ noncomputable def replace (𝓘 : Inv) (σ : Mem) : ConvexPowerset Mem :=
   Nondet.nondet fun (τ : 𝓘.prop_finite.toFinset) ↦
     pure (τ ⊎ σ)
 
-lemma replace_monotone (σ : Mem) : Monotone (replace · σ) := by
-  intro 𝓘 𝓙 hle; simp only [replace]; sorry
+lemma bot_bind {α β : Type} (f : α → ConvexPowerset β) : (⊥ : ConvexPowerset α) >>= f = ⊥ := by
+  refine le_antisymm (le_iff_supset.mpr fun ν _ ↦ ?_) bot_le
+  refine ConvexPowerset.mem_bind.mpr ⟨PMF.pure ⊥, Set.mem_univ _, fun _ ↦ ν, ?_, ?_⟩
+  · intro x hx
+    rw [PMF.support_pure, Set.mem_singleton_iff] at hx
+    subst hx; exact Set.mem_univ _
+  · rw [PMF.pure_bind]
+
+/-- If `σ` satisfies the larger invariant `𝓘`, then every way of replacing the `𝓙`-part of `σ`
+is also a way of replacing its `𝓘`-part. -/
+lemma replace_le {𝓘 𝓙 : Inv} (hle : 𝓘 ≤ 𝓙) {σ : Mem} (h : 𝓘.prop (σ.restrict 𝓘.dom)) :
+    replace 𝓘 σ ≤ replace 𝓙 σ := by
+  classical
+  have hmemI : ∀ {τ}, 𝓘.prop τ → τ ∈ 𝓘.prop_finite.toFinset :=
+    fun hτ ↦ 𝓘.prop_finite.mem_toFinset.mpr hτ
+  have hmemJ : ∀ {τ}, τ ∈ 𝓙.prop_finite.toFinset → 𝓙.prop τ :=
+    fun hτ ↦ 𝓙.prop_finite.mem_toFinset.mp hτ
+  have hI : Nonempty 𝓘.prop_finite.toFinset := ⟨⟨_, hmemI h⟩⟩
+  have hJ : Nonempty 𝓙.prop_finite.toFinset := by
+    have := hle.proj h
+    rw [Mem.restrict_restrict, Set.inter_eq_self_of_subset_right hle.dom] at this
+    exact ⟨⟨_, 𝓙.prop_finite.mem_toFinset.mpr this⟩⟩
+  -- The embedding of the memories of `𝓙` into those of `𝓘`
+  let e : 𝓙.prop_finite.toFinset → 𝓘.prop_finite.toFinset := fun τ ↦
+    ⟨τ.val ⊎ σ.restrict 𝓘.dom, hmemI (hle.mix h (hmemJ τ.2))⟩
+  have he : ∀ τ, ((e τ).val ⊎ σ) = (τ.val ⊎ σ) := by
+    intro τ
+    change ((τ.val ⊎ σ.restrict 𝓘.dom) ⊎ σ) = _
+    rw [Mem.union_assoc, Mem.union_restrict_self]
+  have hinj : Function.Injective e := by
+    intro τ τ' heq
+    have h' := congrArg (fun (ρ : 𝓘.prop_finite.toFinset) ↦ ρ.val.restrict 𝓙.dom) heq
+    simp only [e] at h'
+    rw [Mem.restrict_union_left (𝓙.dom_valid (hmemJ τ.2)),
+      Mem.restrict_union_left (𝓙.dom_valid (hmemJ τ'.2))] at h'
+    exact Subtype.ext h'
+  rw [le_iff_supset]
+  intro ν hν
+  change ν ∈ (if _ : Nonempty _ then ConvexPowerset.nondet _ else ⊥ : ConvexPowerset Mem)
+  change ν ∈ (if _ : Nonempty _ then ConvexPowerset.nondet _ else ⊥ : ConvexPowerset Mem) at hν
+  rw [dif_pos hI]
+  rw [dif_pos hJ] at hν
+  obtain ⟨ξ, k, hk, rfl⟩ := ConvexPowerset.mem_nondet.mp hν
+  refine ConvexPowerset.mem_nondet.mpr ⟨ξ.map e, Function.extend e k (fun _ ↦ ξ.bind k), ?_, ?_⟩
+  · intro i hi
+    rw [PMF.support_map] at hi
+    obtain ⟨j, hj, rfl⟩ := hi
+    simp only [Function.comp_apply]
+    rw [hinj.extend_apply, he]
+    exact hk j hj
+  · rw [PMF.bind_map]
+    congr 1
+    funext j
+    exact (hinj.extend_apply _ _ j).symm
+
+/-- Checking and then replacing the invariant is monotone in the invariant: a larger
+invariant allows more interference (Lemma 5.3 of the paper). -/
+lemma checkReplace_monotone (σ : Mem) : Monotone (fun (𝓘 : Inv) ↦ check 𝓘 σ >>= replace 𝓘) := by
+  intro 𝓘 𝓙 hle
+  simp only
+  by_cases h : 𝓘.prop (σ.restrict 𝓘.dom)
+  · have h' := hle.proj h
+    rw [Mem.restrict_restrict, Set.inter_eq_self_of_subset_right hle.dom] at h'
+    rw [check, if_pos h, pure_bind, check, if_pos h', pure_bind]
+    exact replace_le hle h
+  · rw [check, if_neg h, bot_bind]
+    exact bot_le
 
 end Inv
 
@@ -286,12 +330,25 @@ noncomputable instance {act : Type} [Preorder act] [Sem act Mem (ConvexPowerset 
     MonoSem (WithInv act) Mem (ConvexPowerset Mem) where
   sem_mono := by
     rintro ⟨a, 𝓘⟩ ⟨_, 𝓙⟩ ⟨rfl, hle⟩ σ
-    apply ConvexPowerset.bind_monotone (Inv.check_monotone _ hle)
-    intro σ; simp only
-    apply ConvexPowerset.bind_monotone (Inv.replace_monotone _ hle)
-    intro σ; simp only; apply ConvexPowerset.bind_monotone
-    · exact le_refl _
-    · intro τ; exact Inv.check_monotone _ hle
+    show (Inv.check 𝓘 σ >>= fun σ ↦ Inv.replace 𝓘 σ >>= fun σ ↦
+        Sem.sem a σ >>= fun τ ↦ Inv.check 𝓘 τ) ≤
+      (Inv.check 𝓙 σ >>= fun σ ↦ Inv.replace 𝓙 σ >>= fun σ ↦
+        Sem.sem a σ >>= fun τ ↦ Inv.check 𝓙 τ)
+    rw [← bind_assoc (Inv.check 𝓘 σ) (Inv.replace 𝓘), ← bind_assoc (Inv.check 𝓙 σ) (Inv.replace 𝓙)]
+    refine ConvexPowerset.bind_monotone (Inv.checkReplace_monotone σ hle) ?_
+    intro σ; apply ConvexPowerset.bind_monotone (le_refl _)
+    intro τ; exact Inv.check_monotone _ hle
+
+/-- A singleton pomset is monotone in its label. -/
+lemma pom_singleton_mono {l : Type} [PartialOrder l] [OrderBot l] {ℓ ℓ' : l} (h : ℓ ≤ ℓ') :
+    Pom.singleton ℓ ≤ Pom.singleton ℓ' := by
+  refine ⟨Lpo.singleton default ℓ, rfl, Lpo.singleton default ℓ', rfl, ?_⟩
+  refine ⟨Set.Subset.refl _, fun _ _ _ h ↦ h.elim, fun _ _ _ _ ↦ rfl, fun x ↦ ?_,
+    fun _ _ ↦ rfl, fun _ hx ↦ Or.inl hx⟩
+  change (if default = x then ℓ else ⊥) ≤ (if default = x then ℓ' else ⊥)
+  split_ifs
+  · exact h
+  · exact le_refl _
 
 namespace Cmd
 
@@ -320,11 +377,17 @@ lemma withInv_monotone {act : Type} (c : Cmd act) : Monotone (Cmd.to_pom ∘ c.w
   | while_loop e c ih =>
     simp only [withInv, to_pom]
     apply OmegaCompletePartialOrder.ωSup_le_ωSup_of_le; intro n; use n
-    sorry
+    change (Pom.Semantics.while_body _ _)^[n] ⊥ ≤ (Pom.Semantics.while_body _ _)^[n] ⊥
+    induction n with
+    | zero => exact le_refl _
+    | succ n ihn =>
+      rw [Function.iterate_succ', Function.comp_apply, Function.iterate_succ',
+        Function.comp_apply]
+      unfold Pom.Semantics.while_body Pom.Semantics.if_stmt Pom.Semantics.seq
+      exact Pom.guard_monotone _ (le_refl _) (Pom.seq_monotone ih ihn) (le_refl _)
   | act a =>
     simp only [withInv, to_pom]
-    -- This case is easy, but we need to add a lemma to the pomset library
-    sorry
+    exact pom_singleton_mono (show (⟨a, 𝓘⟩ : WithInv act) ≤ ⟨a, 𝓙⟩ from ⟨rfl, hle⟩)
 
 end Cmd
 

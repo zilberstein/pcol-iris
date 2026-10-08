@@ -138,16 +138,8 @@ theorem sem_withInv_frame {a : Act} {𝓘 : Inv} {W : Set Var} (hD : 𝓘.dom �
     have hdomnW : Mem.dom (show Mem from n.restrict W) = W := by
       rw [Mem.restrict_dom, hdomn]
       exact Set.inter_eq_self_of_subset_right hm
-    have hn : (τ.val ⊎ (m.restrict W)) = n.restrict W := by
-      funext x
-      by_cases hx : x ∈ W
-      · rw [Mem.restrict_apply_of_mem _ hx]
-        by_cases hxD : x ∈ 𝓘.dom
-        · rw [hn_def]; sorry
-        · sorry
-      · rw [Mem.restrict_apply_of_notMem _ hx]
-        have hxD : x ∉ 𝓘.dom := fun hc ↦ hx (hD hc)
-        sorry
+    have hn : (τ.val ⊎ (m.restrict W)) = n.restrict W :=
+      Mem.union_restrict_of_subset (hτdom ▸ hD) m
     rw [hn]
     conv_lhs => rw [h₁ n]
     rw [bind_assoc, bind_assoc]
@@ -160,7 +152,7 @@ theorem sem_withInv_frame {a : Act} {𝓘 : Inv} {W : Set Var} (hD : 𝓘.dom �
       refine Mem.union_congr_right ?_
       intro x hx
       rw [hm₃] at hx
-      sorry
+      rw [hn_def, Mem.union_apply_of_notMem_dom (fun h ↦ hx (hD (hτdom ▸ h)))]
     rw [Inv.check, Inv.check, hrestr]
     by_cases hp : 𝓘.prop (m₃.restrict 𝓘.dom)
     · rw [if_pos hp, if_pos hp, pure_bind, hunion]
@@ -213,8 +205,16 @@ theorem sem_withInv_indep {a : Act} {𝓘 : Inv} {X : Set Var} {p p' : Mem}
   rw [sem_withInv_eq_ite, sem_withInv_eq_ite, if_pos hi, if_pos hi']
   congr 1
   funext τ
+  have hτdom : Mem.dom τ.val = 𝓘.dom := 𝓘.dom_valid ((Set.Finite.mem_toFinset _).mp τ.property)
   have hhav : (τ.val ⊎ p) = (τ.val ⊎ p') := by
-    funext x; sorry
+    refine Mem.union_congr_right fun x hx ↦ ?_
+    rw [hτdom] at hx
+    by_cases hxX : x ∈ X
+    · have := congrFun hX x
+      rwa [Mem.restrict_apply_of_mem _ hxX, Mem.restrict_apply_of_mem _ hxX] at this
+    · have hxp : x ∉ p.dom := by rw [hp]; exact fun h ↦ h.elim hxX hx
+      have hxp' : x ∉ p'.dom := by rw [hp']; exact fun h ↦ h.elim hxX hx
+      rw [Mem.notMem_dom_iff.mp hxp, Mem.notMem_dom_iff.mp hxp']
   rw [hhav]
 
 /-! ### The locality hypotheses are satisfiable
