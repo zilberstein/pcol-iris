@@ -14,6 +14,20 @@ lemma literal_mono (v : Val) : Expr.Mono (literal v) := fun _ h ↦ h
 
 lemma var_mono (x : Var) : Expr.Mono (var x) := fun hle h ↦ (Mem.le_iff.mp hle) x _ h
 
+/-- An expression is *local* when it is monotone in the memory, and stays defined when a
+variable is assigned.  Expressions built from variables, literals and arithmetic are local. -/
+structure Local (e : Expr) : Prop where
+  mono : Expr.Mono e
+  extend : ∀ {σ : Mem} (x : Var) (w : Val), (e σ).isSome → (e (σ.extend x w)).isSome
+
+lemma literal_local (v : Val) : Local (literal v) := ⟨literal_mono v, fun _ _ h ↦ h⟩
+
+lemma var_local (y : Var) : Local (var y) := by
+  refine ⟨var_mono y, fun x w h ↦ ?_⟩
+  by_cases hxy : x = y
+  · subst hxy; simp [var, Mem.extend_apply_self]
+  · rw [var, Mem.extend_apply_of_ne w hxy]; exact h
+
 lemma equals_iff {e₁ e₂ : Expr} (h₁ : Expr.Mono e₁) (h₂ : Expr.Mono e₂) {σ : Mem} :
     (e₁ == e₂) σ ↔ (e₁ σ).isSome ∧ e₁ σ = e₂ σ := by
   refine MProp.upClose_iff (fun {σ τ} hle ⟨hs, heq⟩ ↦ ?_)
