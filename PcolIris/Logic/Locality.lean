@@ -223,21 +223,6 @@ An assignment whose target variable and whose expression stay inside the footpri
 local to `W` and preserves the domain `W`; a test whose expression only reads `X` reads only
 `X`.  These lemmas show that `ActLocal`, `ActDomStable` and `TestLocal` are not vacuous. -/
 
-lemma Mem.dom_extend (m : Mem) (x : Var) (v : Val) :
-    Mem.dom (m.extend x v) = insert x m.dom := by
-  ext y
-  by_cases h : x = y
-  · subst h
-    simp only [Set.mem_insert_iff, true_or, iff_true]
-    change (if x = x then (v : Option Val) else m x) ≠ none
-    rw [if_pos rfl]
-    exact Option.some_ne_none v
-  · have : Mem.extend m x v y = m y := if_neg h
-    change Mem.extend m x v y ≠ none ↔ _
-    rw [this]
-    simp only [Set.mem_insert_iff]
-    exact ⟨fun hc ↦ Or.inr hc, fun hc ↦ hc.elim (fun hy ↦ absurd hy.symm h) id⟩
-
 theorem ActLocal.assign {x : Var} {e : Expr} {W : Set Var}
     (he : ∀ m : Mem, e m = e (show Mem from m.restrict W)) :
     ActLocal (Act.assign x e) W := by
