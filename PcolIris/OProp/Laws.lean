@@ -1,21 +1,10 @@
 import PcolIris.OProp.OProp
 import PcolIris.OProp.ProbSpaceLemmas
-import PcolIris.OProp.SumProd
+import PcolIris.OProp.ProductLaws
 
 namespace Pcol
 
 namespace ProbSpace
-
-/-- Enlarging a probability space can only shrink its support: a smaller space has fewer
-measurable sets, hence fewer sets of full measure to intersect. -/
-lemma support_anti {p q : ProbSpace} (h : p ≤ q) : q.support ⊆ p.support := by
-  intro n hn
-  rw [ProbSpace.support_eq]
-  intro E hE
-  obtain ⟨hEm, hE1⟩ := hE
-  refine ProbSpace.support_subset (h.mspace E hEm) ?_ hn
-  rw [← ProbSpace.μ_eq_one_iff] at hE1 ⊢
-  rw [← h.μ E hEm]; exact hE1
 
 /-- The left factor of a product is contained in the product state. -/
 lemma state_le_product_left (p q : ProbSpace) (n : ℕ) :
@@ -50,12 +39,11 @@ Two separately owned certainties can be combined into a certainty about their co
 is not always possible.)
 -/
 lemma sure_and {P Q : MProp} : iprop(⌈P⌉ ∗ ⌈Q⌉) ⊢ ⌈P ∧ Q⌉ := by
-  rintro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, hle, hP, hQ⟩ n hn
-  have hn' : n ∈ (𝓟₁ ⊗ 𝓟₂).support := ProbSpace.support_anti hle hn
-  obtain ⟨h1, h2⟩ := ProbSpace.mem_support_product_iff.mp hn'
-  have hst : (𝓟₁ ⊗ 𝓟₂).state n ≤ 𝓟.state n := hle.state n
-  exact ⟨P.upcl ((ProbSpace.state_le_product_left 𝓟₁ 𝓟₂ n).trans hst) (hP h1),
-    Q.upcl ((ProbSpace.state_le_product_right hdisj n).trans hst) (hQ h2)⟩
+  rintro 𝓟 ⟨𝓟₁, 𝓟₂, hdisj, ⟨g, hg⟩, hP, hQ⟩ n hn
+  obtain ⟨h1, h2⟩ := ProbSpace.mem_support_product_iff.mp (hg.mem_support hn)
+  have hst : (𝓟₁ ⊗ 𝓟₂).state (g n) ≤ 𝓟.state n := hg.state n hn
+  exact ⟨P.upcl ((ProbSpace.state_le_product_left 𝓟₁ 𝓟₂ (g n)).trans hst) (hP h1),
+    Q.upcl ((ProbSpace.state_le_product_right hdisj (g n)).trans hst) (hQ h2)⟩
 
 lemma sure_weaken {P Q : MProp} (h : P ⊢ Q) : ⌈P⌉ ⊢ ⌈Q⌉ := by
   intro 𝓟 hP i hi; apply Set.mem_preimage.mpr

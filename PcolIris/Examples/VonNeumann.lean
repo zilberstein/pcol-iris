@@ -23,6 +23,8 @@ import PcolIris.OProp.Laws
 
 namespace Pcol
 
+noncomputable section
+
 open MProp
 open OProp
 
@@ -124,25 +126,26 @@ lemma eqTest_eval {σ : Mem} {a b : Val} (hx : σ "x" = some a) (hy : σ "y" = s
 lemma guard_false {b : Val} (hb : b = 0 ∨ b = 1) :
     (iprop(($"x" == Expr.literal b) ∧ ($"y" == Expr.literal (1 - b))) : MProp) ⊢
       (eqTest ($"x") ($"y") == Expr.literal 0) := by
-  rintro σ ⟨⟨-, hx⟩, -, hy⟩
-  have hx' : σ "x" = some b := hx
-  have hy' : σ "y" = some (1 - b) := hy
+  rintro σ ⟨hx, hy⟩
+  have hx' : σ "x" = some b := Expr.var_equals_literal_iff.mp hx
+  have hy' : σ "y" = some (1 - b) := Expr.var_equals_literal_iff.mp hy
   have hne : b ≠ 1 - b := by rcases hb with rfl | rfl <;> norm_num
   have h := eqTest_eval (σ := σ) (a := b) (b := 1 - b) hx' hy'
   rw [if_neg hne] at h
-  exact ⟨by rw [h]; rfl, by rw [h]; rfl⟩
+  exact MProp.upClose_of ⟨by rw [h]; rfl, by rw [h]; rfl⟩
 
 /-- When the two coins agree, the guard of the loop is true. -/
 lemma guard_true :
     (iprop(($"x" == $"y") ∧ own ($"p'")) : MProp) ⊢
       (eqTest ($"x") ($"y") == Expr.literal 1) := by
-  rintro σ ⟨⟨hs, hxy⟩, -⟩
+  rintro σ ⟨hxy, -⟩
+  obtain ⟨hs, hxy⟩ := Expr.var_equals_var_iff.mp hxy
   obtain ⟨a, ha⟩ := Option.isSome_iff_exists.mp hs
   have ha' : σ "x" = some a := ha
   have hy : σ "y" = some a := hxy.symm.trans ha
   have h := eqTest_eval (σ := σ) ha' hy
   rw [if_pos rfl] at h
-  exact ⟨by rw [h]; rfl, by rw [h]; rfl⟩
+  exact MProp.upClose_of ⟨by rw [h]; rfl, by rw [h]; rfl⟩
 
 /-- `φ₀` is precise. -/
 lemma phi0_precise : phi0.Precise := Precise.oplus fun _ _ ↦ Precise.sure _
@@ -198,6 +201,7 @@ lemma mem_restrict_mono (σ : Mem) {X Y : Set Var} (h : X ⊆ Y) : σ.restrict X
 
 lemma own_var_restrict {σ : Mem} {x : Var} {X : Set Var} (hx : x ∈ X) (h : (σ x).isSome) :
     (own (Expr.var x) : MProp) (σ.restrict X) := by
+  rw [MProp.own_iff (Expr.var_mono x)]
   change (((σ.restrict X) x)).isSome
   rw [Mem.restrict_apply_of_mem σ hx]
   exact h
@@ -211,11 +215,10 @@ lemma restrict_disjoint (σ : Mem) {X Y : Set Var} (h : Disjoint X Y) :
 lemma phi1_resources :
     (iprop(($"x" == $"y") ∧ own ($"p'")) : MProp) ⊢
       iprop(own ($"p'") ∗ (own ($"x") ∗ own ($"y"))) := by
-  rintro σ ⟨⟨hs, hxy⟩, hp⟩
-  have hxs : (σ "x").isSome := hs
-  have hxy' : σ "x" = σ "y" := hxy
+  rintro σ ⟨hxy, hp⟩
+  obtain ⟨hxs, hxy'⟩ := Expr.var_equals_var_iff.mp hxy
   have hys : (σ "y").isSome := hxy' ▸ hxs
-  have hps : (σ "p'").isSome := hp
+  have hps : (σ "p'").isSome := MProp.own_var_iff.mp hp
   refine ⟨σ.restrict {"p'"}, σ.restrict {"x", "y"}, ?_, ?_, ?_, ?_⟩
   · exact restrict_disjoint σ (by simp)
   · exact mem_union_le (mem_restrict_le σ _) (mem_restrict_le σ _)
@@ -269,7 +272,7 @@ lemma wp_nsplit2 {ι : Type} {ψ : OProp} {J : Inv} {F : ProbSpace → Prop} {c 
 lemma inv_of_p_eq {L : Finset ℚ} (v : Val) (hv : v ∈ L) :
     ($"p" == Expr.literal v) ⊢ (inv L).to_MProp := by
   intro σ hσ
-  have hp : σ "p" = some v := hσ.2
+  have hp : σ "p" = some v := Expr.var_equals_literal_iff.mp hσ
   have hmem : "p" ∈ (inv L).dom := rfl
   refine ⟨?_, v, hv, ?_⟩
   · rw [Mem.restrict_dom]
@@ -285,7 +288,7 @@ lemma exists_p_of_inv (L : Finset ℚ) :
   have hmem : "p" ∈ (inv L).dom := rfl
   obtain ⟨-, v, hv, hp⟩ := hσ
   rw [Mem.restrict_apply_of_mem σ hmem] at hp
-  exact ⟨_, ⟨⟨v, hv⟩, rfl⟩, ⟨by simp [Expr.var, hp], by simp [Expr.var, Expr.literal, hp]⟩⟩
+  exact ⟨_, ⟨⟨v, hv⟩, rfl⟩, Expr.var_equals_literal_iff.mpr hp⟩
 
 /-- The two-coin mixture: with probability `q` the two coins disagree, in which case `x` is
 a fair coin flip (`phi0`); otherwise they agree and another iteration starts (`phi1`). -/
@@ -453,7 +456,8 @@ lemma wp_sample_y {L : Finset ℚ} {F : ProbSpace → Prop} (eps X : ℚ)
     · iapply hy
   · iintro ⟨hyb, hp'⟩
     ihave hp'' := sure_weaken (P := iprop(($"p'") == Expr.literal X))
-      (Q := iprop(own ($"p'"))) (fun σ h ↦ h.1) $$ hp'
+      (Q := iprop(own ($"p'")))
+      (fun σ h ↦ MProp.own_var_iff.mpr (by rw [Expr.var_equals_literal_iff.mp h]; rfl)) $$ hp'
     iapply bodyMix_bodyPost' heps heps' hX hX'
     iapply body_split X (by linarith) (by linarith)
     iframe
@@ -585,8 +589,10 @@ lemma wp_loop {L : Finset ℚ} (eps : ℚ)
 lemma xy_zero_eq {P Q : MProp} :
     (iprop(((($"x") == Expr.literal 0) ∧ P) ∧ (((($"y") == Expr.literal 0) ∧ Q) ∧
       own ($"p'"))) : MProp) ⊢ iprop((($"x") == ($"y")) ∧ own ($"p'")) := by
-  rintro σ ⟨⟨⟨hs, hx⟩, -⟩, ⟨⟨-, hy⟩, -⟩, hp⟩
-  exact ⟨⟨hs, hx.trans hy.symm⟩, hp⟩
+  rintro σ ⟨⟨hx, -⟩, ⟨hy, -⟩, hp⟩
+  have hx' := Expr.var_equals_literal_iff.mp hx
+  have hy' := Expr.var_equals_literal_iff.mp hy
+  exact ⟨Expr.var_equals_var_iff.mpr ⟨by rw [hx']; rfl, hx'.trans hy'.symm⟩, hp⟩
 
 /-- After the two initialising assignments, the loop invariant holds (at rank `1`). -/
 lemma loopInv_init {P Q : MProp} :
@@ -619,7 +625,7 @@ theorem vonNeumann_spec (L : Finset ℚ) (eps : ℚ) (heps : 0 < eps) (heps' : e
   isplitl [hx]
   · irevert hx; iapply sure_weaken; iintro hx
     isplit
-    · intro _ _; exact ⟨rfl, rfl⟩
+    · intro _ _; exact MProp.upClose_of ⟨rfl, rfl⟩
     · iapply hx
   · iintro hx0
     iapply wp_seq
@@ -627,7 +633,7 @@ theorem vonNeumann_spec (L : Finset ℚ) (eps : ℚ) (heps : 0 < eps) (heps' : e
     isplitl [hy]
     · irevert hy; iapply sure_weaken; iintro hy
       isplit
-      · intro _ _; exact ⟨rfl, rfl⟩
+      · intro _ _; exact MProp.upClose_of ⟨rfl, rfl⟩
       · iapply hy
     · iintro hy0
       iapply wp_conseq phi0_fair
@@ -637,5 +643,7 @@ theorem vonNeumann_spec (L : Finset ℚ) (eps : ℚ) (heps : 0 < eps) (heps' : e
       iframe
 
 end VonNeumann
+
+end
 
 end Pcol

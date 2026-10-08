@@ -240,6 +240,60 @@ lemma dom_restrict_subset (σ : Mem) (X : Set Var) : Mem.dom (σ.restrict X) ⊆
   by_contra hc
   exact (mem_dom_iff.mp hx) (restrict_apply_of_notMem _ hc)
 
+/-- The extension order, stated without the `match`. -/
+lemma le_iff : σ ≤ τ ↔ ∀ x v, σ x = some v → τ x = some v := by
+  constructor
+  · intro h x v hx
+    have := h x
+    rw [hx] at this
+    exact this
+  · intro h x
+    cases hx : σ x with
+    | none => trivial
+    | some v => exact h x v hx
+
+lemma mem_dom_of_eq_some {v : Val} (h : σ x = some v) : x ∈ σ.dom := by
+  rw [mem_dom_iff, h]; simp
+
+/-- The union is monotone, provided that the new variables of the left memory do not clash
+with the right memory (the union is left-biased). -/
+lemma union_mono {σ' τ' : Mem} (h₁ : σ ≤ σ') (h₂ : τ ≤ τ') (hd : Disjoint σ'.dom τ.dom) :
+    (σ ⊎ τ) ≤ (σ' ⊎ τ') := by
+  rw [le_iff] at h₁ h₂ ⊢
+  intro x v hx
+  by_cases hs : x ∈ σ.dom
+  · rw [union_apply_of_mem_dom hs] at hx
+    have hσ' := h₁ x v hx
+    rw [union_apply_of_mem_dom (mem_dom_of_eq_some hσ'), hσ']
+  · rw [union_apply_of_notMem_dom hs] at hx
+    have hx' : x ∉ σ'.dom := fun hc ↦ Set.disjoint_left.mp hd hc (mem_dom_of_eq_some hx)
+    rw [union_apply_of_notMem_dom hx', h₂ x v hx]
+
+/-- The union of memories with disjoint domains is commutative. -/
+lemma union_comm (hd : Disjoint σ.dom τ.dom) : (σ ⊎ τ) = (τ ⊎ σ) := by
+  funext x
+  by_cases hs : x ∈ σ.dom
+  · have ht : x ∉ τ.dom := Set.disjoint_left.mp hd hs
+    rw [union_apply_of_mem_dom hs, union_apply_of_notMem_dom ht]
+  · rw [union_apply_of_notMem_dom hs]
+    by_cases ht : x ∈ τ.dom
+    · rw [union_apply_of_mem_dom ht]
+    · rw [union_apply_of_notMem_dom ht, notMem_dom_iff.mp hs, notMem_dom_iff.mp ht]
+
+lemma dom_mono (h : σ ≤ τ) : σ.dom ⊆ τ.dom := by
+  intro x hx
+  obtain ⟨v, hv⟩ := Option.ne_none_iff_exists'.mp (mem_dom_iff.mp hx)
+  exact mem_dom_of_eq_some ((le_iff.mp h) x v hv)
+
+lemma le_union_left (σ τ : Mem) : σ ≤ (σ ⊎ τ) := by
+  rw [le_iff]
+  intro x v hx
+  rw [union_apply_of_mem_dom (mem_dom_of_eq_some hx), hx]
+
+lemma le_union_right (hd : Disjoint σ.dom τ.dom) : τ ≤ (σ ⊎ τ) := by
+  rw [union_comm hd]
+  exact le_union_left τ σ
+
 end Mem
 
 end Pcol
