@@ -23,8 +23,9 @@ open Linearization
 invariant `𝓘`, and let `μ` be an initial distribution framed by `𝓟₁ ⊗ 𝓟₂`, a frame `𝓟fr`
 and a space `𝓙` satisfying the invariant.  If, for an arbitrary frame `𝓕`, running thread
 `k` on any distribution framed by `𝓟ₖ` and `𝓕` yields a distribution framed by `𝓠ₖ` and
-`𝓕`, then running the two threads in parallel on `μ` yields a distribution framed by
-`𝓠₁ ⊗ 𝓠₂` and `𝓟fr`.
+`𝓕` (without deallocating variables), then running the two threads in parallel on `μ`
+yields a distribution framed by `𝓠₁ ⊗ 𝓠₂` and `𝓟fr` (again without deallocating
+variables).
 
 The side conditions of the original statement (each thread only acts on the variables it
 owns, and only tests its own variables) are replaced here by the requirement that the two
@@ -39,11 +40,11 @@ theorem lemma_C6 {𝓘 : Inv} {p₁ p₂ : Pom (Label (WithInv Act) Test)}
     {𝓟₁ 𝓟₂ 𝓠₁ 𝓠₂ 𝓟fr 𝓙 : ProbSpace} {μ : Distr Mem}
     (hμ : Framed 𝓘 (𝓟₁ ⊗ 𝓟₂) 𝓟fr 𝓙 μ)
     (h₁ : ∀ (𝓕 𝓙₁ : ProbSpace) (μ₁ : Distr Mem), Framed 𝓘 𝓟₁ 𝓕 𝓙₁ μ₁ →
-      ∀ ν₁ ∈ ConvexPowerset.singleton' μ₁ >>= 𝓛 p₁, ∃ 𝓙₁', Framed 𝓘 𝓠₁ 𝓕 𝓙₁' ν₁)
+      ∀ ν₁ ∈ ConvexPowerset.singleton' μ₁ >>= 𝓛 p₁, Distr.Keeps μ₁ ν₁ ∧ ∃ 𝓙₁', Framed 𝓘 𝓠₁ 𝓕 𝓙₁' ν₁)
     (h₂ : ∀ (𝓕 𝓙₂ : ProbSpace) (μ₂ : Distr Mem), Framed 𝓘 𝓟₂ 𝓕 𝓙₂ μ₂ →
-      ∀ ν₂ ∈ ConvexPowerset.singleton' μ₂ >>= 𝓛 p₂, ∃ 𝓙₂', Framed 𝓘 𝓠₂ 𝓕 𝓙₂' ν₂) :
+      ∀ ν₂ ∈ ConvexPowerset.singleton' μ₂ >>= 𝓛 p₂, Distr.Keeps μ₂ ν₂ ∧ ∃ 𝓙₂', Framed 𝓘 𝓠₂ 𝓕 𝓙₂' ν₂) :
     ∀ ν ∈ ConvexPowerset.singleton' μ >>= 𝓛 (Pom.Semantics.par p₁ p₂),
-      ∃ 𝓙', Framed 𝓘 (𝓠₁ ⊗ 𝓠₂) 𝓟fr 𝓙' ν := by
+      Distr.Keeps μ ν ∧ ∃ 𝓙', Framed 𝓘 (𝓠₁ ⊗ 𝓠₂) 𝓟fr 𝓙' ν := by
   sorry
 
 end Pcol

@@ -59,6 +59,17 @@ Following Iris, specifications are stated with a weakest-precondition predicate
 that the initial and final distributions refine (`Framed`): the part of the state that
 satisfies the invariant is any space `𝓙` with `⌈I⌉ 𝓙`, as in `P ⊨ φ ∗ ⌈I⌉`.
 
+The paper runs programs on memories with a fixed domain. Here memories are partial, so
+`wp` states two facts that the paper gets for free:
+
+- the postcondition space owns no variables beyond those of the precondition space
+  (`𝓠.dom ⊆ 𝓟.dom`); this is what makes the postconditions of two parallel threads
+  independent;
+- the program does not deallocate variables (`Distr.Keeps μ ν`: every variable that is
+  allocated in all initial memories is allocated in all final memories). The postcondition
+  space may be smaller than the precondition space, so without this fact the branches of an
+  outcome conjunction could not be brought back to a common domain (`Split`).
+
 ## Invariants
 
 Invariants are ordered by factorization (`Inv.LE_Inv`): `𝓘 ≤ 𝓙` when `𝓘` is `𝓙 ∗ 𝓚` for

@@ -341,8 +341,17 @@ same defect that the development itself documents for `sum_prod_distribute`. -/
 /-- **Introduction of a nondeterministic choice**: every branch of a nondeterministic choice
 entails the choice itself.  (In the semantics of the paper `&` is a union of sets of
 probability spaces, so this is immediate.) -/
-lemma nondet_intro {iota : Type} [Countable iota] {phi : iota → OProp} (i : iota) : phi i ⊢ OProp.nondet phi :=
-  sorry
+lemma nondet_intro {iota : Type} [Countable iota] {phi : iota → OProp} (i : iota) :
+    phi i ⊢ OProp.nondet phi := by
+  intro 𝓟 h
+  obtain ⟨code, hcode⟩ := Countable.exists_injective_nat iota
+  refine ⟨PMF.pure i, fun v ↦ 𝓟.shift (code v), 𝓟.dom,
+    fun hij ↦ ProbSpace.disjoint_support_shift _ _ (hcode.ne hij), fun _ ↦ rfl, ?_, ?_⟩
+  · exact (ProbSpace.sum_pure_le _ _ i).trans (ProbSpace.shift_le _ _)
+  · intro v hv
+    rw [PMF.support_pure, Set.mem_singleton_iff] at hv
+    subst hv
+    exact (phi v).mono (ProbSpace.le_shift _ _) h
 
 /-- Nondeterministic choices are convex: a mixture of unions of mixtures is again one. -/
 lemma Convex.nondet {iota : Type} [Countable iota] {phi : iota → OProp} : Convex (OProp.nondet phi) := sorry
@@ -551,7 +560,11 @@ lemma wp_body_nondet {L : Finset ℚ} {F : ProbSpace → Prop} (eps : ℚ)
 the loop body. -/
 lemma phi1_split : phi1 ⊢ iprop(⌈own ($"p'")⌉ ∗ (⌈own ($"x")⌉ ∗ ⌈own ($"y")⌉)) :=
   Iris.BI.Entails.trans (OProp.sure_weaken phi1_resources)
-    (Iris.BI.Entails.trans OProp.sure_sep.1 (Iris.BI.sep_mono_right OProp.sure_sep.1))
+    (Iris.BI.Entails.trans
+      (OProp.sure_sep (MProp.Footprint.own_var _)
+        ((MProp.Footprint.own_var _).sep (MProp.Footprint.own_var _) (by simp))).1
+      (Iris.BI.sep_mono_right
+        (OProp.sure_sep (MProp.Footprint.own_var _) (MProp.Footprint.own_var _)).1))
 
 /-- **The loop body.**  Starting from the loop invariant at rank `1`, one iteration of the
 loop exits with probability at least `2 * eps * (1 - eps)`. -/

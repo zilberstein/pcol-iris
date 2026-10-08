@@ -397,6 +397,13 @@ theorem product_assoc' (p q r : ProbSpace) : (p ⊗ (q ⊗ r)) ≤ ((p ⊗ q) �
       Equiv.prodAssoc_apply, id_eq, Mem.union_assoc]
     exact le_refl _
 
+/-- Swapping the two right factors of a nested product. -/
+lemma product_swap_right {a b c : ProbSpace} (hbc : Disjoint b.dom c.dom)
+    (ha : Disjoint a.dom (b.dom ∪ c.dom)) : ((a ⊗ c) ⊗ b) ≤ ((a ⊗ b) ⊗ c) :=
+  (product_assoc a c b).trans
+    ((product_mono_right (product_comm hbc) (by rwa [Set.union_comm] at ha)).trans
+      (product_assoc' a b c))
+
 /-! ### Projections and the unit -/
 
 /-- A product carries at least the information of its left factor. -/
