@@ -164,15 +164,73 @@ lemma wp_conseq (h : φ ⊢ ψ) : wp_base 𝓘 F c φ ⊢ wp_base 𝓘 F c ψ :=
   have ⟨hk, 𝓠, 𝓙', hf', hdom, hφ⟩ := hc μ 𝓟fr 𝓙 hF hf ν hν
   exact ⟨hk, 𝓠, 𝓙', hf', hdom, h 𝓠 hφ⟩
 
+/-- The `Split` rule: the weakest precondition distributes over outcome conjunctions.
+
+The initial distribution is split into its conditionings on the summands of the
+precondition; each is run separately, and the results (padded to the variables of the
+precondition, and relabeled to disjoint outcomes) are glued back together. -/
 lemma wp_split {ψ : ι → OProp} :
     (⨁[ ξ ] fun v ↦ wp_base 𝓘 F c (ψ v)) ⊢ wp_base 𝓘 F c (⨁[ ξ ] ψ) := by
-  -- Plan: decompose `μ` along the summands of the precondition, run each summand
-  -- separately, and recombine the results with `ProbSpace.sum` (relabeling the outcomes of
-  -- the summands so that their supports are disjoint).
-  sorry
+  classical
+  rintro 𝓟 ⟨𝓟s, V, hd, hdom, hsum, hwp⟩ μ 𝓟fr 𝓙 hF hf ν hν
+  have hf' := hf.mono hsum
+  obtain ⟨μ', hμ', rfl⟩ := Framed.split (hd := hd) hf'
+  -- The run is the average of the runs from the conditioned distributions
+  obtain ⟨μ₀, hμ₀, K, hK, rfl⟩ := ConvexPowerset.mem_bind.mp hν
+  have hμ₀' : ξ.bind μ' = μ₀ := by
+    have h' : μ₀ ∈ (ConvexPowerset.singleton' (ξ.bind μ')).set := hμ₀
+    rw [ConvexPowerset.singleton'_set_eq] at h'
+    exact proper_dist_maximal hf.refines.bot_0 h'
+  subst hμ₀'
+  have hsupp : ∀ i, ξ i ≠ 0 → (μ' i).support ⊆ (ξ.bind μ').support := fun i hi x hx ↦
+    (PMF.mem_support_bind_iff _ _ _).mpr ⟨i, (PMF.mem_support_iff _ _).mpr hi, hx⟩
+  have hrun : ∀ i, ξ i ≠ 0 →
+      (μ' i).bind K ∈ ConvexPowerset.singleton' (μ' i) >>= 𝓛 (c.withInv 𝓘).to_pom :=
+    fun i hi ↦ ConvexPowerset.mem_bind.mpr ⟨μ' i, ConvexPowerset.self_mem_singleton' _, K,
+      fun x hx ↦ hK x (hsupp i hi hx), rfl⟩
+  -- The variables of the precondition are disjoint from the frame and the invariant
+  have hVfr : Disjoint V 𝓟fr.dom := hf'.disj_frame
+  have hVI : Disjoint V 𝓘.dom :=
+    (Set.disjoint_union_left.mp hf'.disj_inv).1.mono_right
+      (OProp.sure_forget 𝓘.footprint hf.inv).1
+  -- Run each branch, and pad its postcondition to the variables `V`
+  have hbr : ∀ i, ∃ 𝓠 𝓙' : ProbSpace, ξ i ≠ 0 →
+      Distr.Keeps (μ' i) ((μ' i).bind K) ∧ Framed 𝓘 𝓠 𝓟fr 𝓙' ((μ' i).bind K) ∧
+        𝓠.dom = V ∧ 𝓙'.dom = 𝓘.dom ∧ ψ i 𝓠 := by
+    intro i
+    by_cases hi : ξ i = 0
+    · exact ⟨ProbSpace.unit, ProbSpace.unit, fun h ↦ absurd hi h⟩
+    obtain ⟨hk, 𝓠, 𝓙', hfQ, hdomQ, hψ⟩ :=
+      hwp i ((PMF.mem_support_iff _ _).mpr hi) _ 𝓟fr 𝓙 hF (hμ' i hi) _ (hrun i hi)
+    obtain ⟨𝓙₀, hJ₀, -, hfQ⟩ := hfQ.shrink_inv
+    have hown : Distr.Owns ((μ' i).bind K) V := hk V (hdom i ▸ (hμ' i hi).owns)
+    obtain ⟨𝓠', hle, hdom', hfQ'⟩ := hfQ.pad hown hVfr (hJ₀ ▸ hVI)
+    refine ⟨𝓠', 𝓙₀, fun _ ↦ ⟨hk, hfQ', ?_, hJ₀, (ψ i).mono hle hψ⟩⟩
+    rw [hdom', Set.union_eq_right.mpr (hdomQ.trans (hdom i).subset)]
+  choose 𝓠 𝓙' hbr using hbr
+  -- Glue the branches back together
+  obtain ⟨𝓠', hd', hdom', 𝓙'', hle, hfin⟩ := Framed.glue (ν := fun i ↦ (μ' i).bind K)
+    (fun i hi ↦ (hbr i hi).2.1) (fun i hi ↦ (hbr i hi).2.2.1) (fun i hi ↦ (hbr i hi).2.2.2.1)
+  change Distr.Keeps (ξ.bind μ') ((ξ.bind μ').bind K) ∧ _
+  rw [PMF.bind_bind]
+  refine ⟨fun D hD m hm ↦ ?_, ProbSpace.sum ξ 𝓠' V hd' hdom', 𝓙'', hfin,
+    (show V ⊆ 𝓟.dom from ProbSpace.dom_mono hsum), 𝓠', V, hd', hdom', le_refl _, fun v hv ↦ ?_⟩
+  · have hm' : (m : WithBot Mem) ∈ (ξ.bind fun i ↦ (μ' i).bind K).support :=
+      (PMF.mem_support_iff _ _).mpr hm
+    obtain ⟨i, hi, hmi⟩ := (PMF.mem_support_bind_iff _ _ _).mp hm'
+    have hi' : ξ i ≠ 0 := (PMF.mem_support_iff _ _).mp hi
+    exact (hbr i hi').1 D (fun m' hm'' ↦ hD m' (hsupp i hi' ((PMF.mem_support_iff _ _).mpr hm'')))
+      m ((PMF.mem_support_iff _ _).mp hmi)
+  · have hv' : ξ v ≠ 0 := (PMF.mem_support_iff _ _).mp hv
+    exact (ψ v).mono (hle v hv') (hbr v hv').2.2.2.2
 
+/-- The `NSplit` rule: the weakest precondition distributes over nondeterministic outcome
+conjunctions. -/
 lemma wp_nsplit {ψ : ι → OProp} :
-    (& fun v ↦ wp_base 𝓘 F c (ψ v)) ⊢ wp_base 𝓘 F c (& ψ) := by sorry
+    (& fun v ↦ wp_base 𝓘 F c (ψ v)) ⊢ wp_base 𝓘 F c (& ψ) := by
+  rintro 𝓟 ⟨ξ, h⟩
+  have hle : (⨁[ξ] ψ) ⊢ & ψ := fun _ h ↦ ⟨ξ, h⟩
+  exact wp_conseq hle 𝓟 (wp_split (ξ := ξ) 𝓟 h)
 
 lemma wp_weaken :
     wp 𝓘 c ψ ⊢ wp_weak 𝓘 c ψ := by
